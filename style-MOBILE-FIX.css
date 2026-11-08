@@ -1,0 +1,291 @@
+/* ════════════════════════════════════════════════════════════════════════════
+   GAICANI MOBILE FIX v2 — single source of truth for mobile layout
+   Loads LAST (after style.css / games.css / auth.css) on purpose, so every
+   rule in here is written to WIN the cascade. Where a rule needs to survive
+   no matter what gets added later to style.css, it uses !important —
+   that's intentional here, not sloppiness: this file's whole job is to be
+   the final word on mobile layout.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── DYNAMIC VIEWPORT HEIGHT (keeps this — it's correct) ─────────────────── */
+
+html, body {
+  height: 100%;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* NOTE: body.keyboard-open must NOT set height:auto here. Doing so cancels
+   the var(--app-height) rule above at the exact moment the keyboard opens,
+   collapsing <body> down to its content height instead of the real visible
+   viewport. Since .chat-input is position:fixed, it stays correctly pinned
+   above the keyboard either way — so the collapse just leaves a dead gap
+   between the last message and the input bar. Keep using var(--app-height)
+   in both states so .chat-container (flex:1) fills the actual visible area. */
+
+/* ── SAFE AREA (notch / gesture bar) ──────────────────────────────────────── */
+
+@supports (padding: max(0px)) {
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   PHONE LAYOUT — single breakpoint, matches style.css's 600px so both
+   files agree on when "mobile mode" starts.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 600px) {
+
+  /* Hard guarantee: nothing in the top bar can ever push past the viewport
+     edge, no matter what gets added to style.css later. */
+  .top-bar,
+  .left-side,
+  .right-side {
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+  }
+
+  .top-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    height: auto !important;
+    padding: 0 !important;
+    padding-top: max(0px, env(safe-area-inset-top)) !important;
+    gap: 0 !important;
+  }
+
+  .left-side {
+    padding: 8px 14px 5px !important;
+    gap: 8px !important;
+    min-width: 0;
+  }
+
+  .right-side {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    gap: 6px !important;
+    padding: 5px 10px 8px !important;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    width: 100%;
+  }
+
+  /* Every top-bar button becomes a small icon-only circle on phones —
+     this now applies to ALL of them, including the interests ("ინტ")
+     button that style.css was letting slip through at full size. */
+  .change-name-btn,
+  .block-button,
+  .report-button,
+  .next-button,
+  .interests-btn,
+  .music-btn,
+  .game-btn {
+    padding: 0 !important;
+    width: 38px !important;
+    height: 38px !important;
+    min-height: 0 !important;
+    border-radius: 50% !important;
+    font-size: 1.05em !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+
+  .btn-label { display: none !important; }
+  .btn-icon  { display: inline !important; line-height: 1; }
+
+  /* ძებნა (search/next) stays a labeled pill — it's the primary action */
+  .next-button {
+    width: auto !important;
+    padding: 0 16px !important;
+    border-radius: 20px !important;
+    gap: 5px;
+  }
+  .next-button .btn-label { display: inline !important; font-size: 0.82em; }
+
+  /* ინტერესები keeps its label too, but at a size that actually fits */
+  .interests-btn {
+    width: auto !important;
+    padding: 0 12px !important;
+    border-radius: 20px !important;
+    font-size: 0.78em !important;
+    margin-right: auto;
+  }
+  .interests-btn .btn-icon  { display: none !important; }
+  .interests-btn .btn-label { display: inline !important; font-size: 1em; }
+
+  .user-name-display,
+  .partner-name-display {
+    font-size: 0.72em !important;
+    padding: 3px 10px !important;
+    max-width: 100px !important;
+    border-radius: 12px !important;
+  }
+
+  .site-name { font-size: 1.05em; }
+  #onlineCount { font-size: 0.75em; color: #8b8fa8; }
+
+  /* ── CHAT AREA ─────────────────────────────────────────────────────────── */
+  /* The timestamp and the 🙂/↩ buttons sit beside each bubble, so on a
+     phone 82% left the text itself only ~130px at 320px wide. */
+  .message-wrapper { max-width: 92%; }
+  .message-wrapper.gif-msg-wrapper { max-width: 200px; }
+
+  /* ── INPUT BAR ─────────────────────────────────────────────────────────── */
+  .chat-input-row {
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    gap: 7px;
+    align-items: flex-end; /* beside the last line when a long message grows the box */
+  }
+
+  .chat-input textarea,
+  .chat-input input,
+  #messageInput {
+    font-size: 16px; /* prevents iOS auto-zoom on focus */
+  }
+
+  .modal-content { padding: 20px 16px 18px; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   VERY SMALL PHONES (≤360px) — shrink the icon buttons one notch further
+   so 4-5 of them never crowd the search pill off the row.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 360px) {
+  .change-name-btn,
+  .block-button,
+  .report-button,
+  .interests-btn,
+  .music-btn,
+  .game-btn {
+    width: 32px !important;
+    height: 32px !important;
+    font-size: 0.95em !important;
+  }
+  .next-button { padding: 0 12px !important; font-size: 0.85em; }
+}
+
+/* Phones: a long message gets the full width and its time / 🙂 / ↩ wrap onto
+   a line under it, instead of the bubble being squeezed beside them (that
+   left ~160px of text on a 320px screen). Short messages keep everything on
+   one line, exactly as before. Own messages are [↩][time][bubble], so their
+   lines stack in reverse to keep the bubble on top. */
+@media (max-width: 480px) {
+  .message-row { flex-wrap: wrap; row-gap: 3px; }
+  .message-wrapper.you .message-row { flex-wrap: wrap-reverse; justify-content: flex-end; }
+}
+
+/* Small phones (iPhone SE / 320–360px Androids): the top row is logo, online
+   count, partner, you and ⋮ — it needed ~335px, pushing ⋮ off the edge. */
+@media (max-width: 360px) {
+  .left-side { padding: 8px 10px 5px !important; gap: 6px !important; }
+  #onlineCount { font-size: 0.7em; white-space: nowrap; }
+  .user-name-display,
+  .partner-name-display { padding: 3px 8px !important; max-width: 84px !important; min-width: 0; }
+  .reg-menu-container { flex-shrink: 0; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   LANDSCAPE PHONES
+   ════════════════════════════════════════════════════════════════════════════ */
+
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 560px) {
+  .top-bar { flex-direction: row !important; height: 44px !important; }
+  .right-side { width: auto !important; border-top: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY & PRINT
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Welcome / login / sign-up window: its main button stays visible at the
+   bottom of the window while the rest scrolls — on a small or sideways phone
+   it used to sit below the fold, under the logo. (Not for the guest
+   "საუბრის დაწყება" and sign-up buttons — see below.) */
+.modal-content .auth-submit-btn {
+  position: -webkit-sticky;
+  position: sticky;
+  bottom: 10px;
+  z-index: 2;
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.35), 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+/* Sign-up: the button stays in its place at the end of the form instead of
+   floating over the pictures while you scroll or type, and the 24 pictures
+   sit in a compact box of their own (about two and a half rows, the rest
+   scrolls inside it), so the whole form fits on a phone screen. */
+.modal-content #signup-btn {
+  position: static;
+  box-shadow: none;
+}
+/* Guest tab: "საუბრის დაწყება" also stays in its place under the list
+   instead of floating over it. */
+.modal-content #saveNameBtn { position: static; }
+#signup-avatar-grid {
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 8px;
+  max-height: 168px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+#signup-avatar-grid .avatar-picker-option:hover { transform: none; }
+
+/* Short screens (sideways phones): the logo alone filled the window. */
+@media (max-height: 560px) {
+  .modal-logo { width: auto !important; height: auto !important; max-width: 95%; max-height: 26vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .chat-input { display: none; }
+}
+
+.chat-input .char-count:empty { display: none; }
+.chat-input #messageInput {
+  max-height: min(120px, max(44px, calc(var(--app-height, 100vh) * .25)));
+  overflow-y: auto;
+}
+body.keyboard-open .chat-input { padding-bottom: 0; }
+body.keyboard-open .chat-input .chat-input-row { padding-bottom: 7px; }
+.gif-picker { max-height: max(0px, calc(var(--app-height, 100vh) - var(--rc-composer-height, 70px) - 60px)); }
+body.keyboard-open .gif-picker { max-height: max(0px, calc(var(--app-height, 100vh) - 8px)); }
+
+@media (max-width: 360px) {
+  .chat-input-row { flex-wrap: wrap; gap: 4px; padding-inline: 8px; }
+  .chat-input .char-count {
+    flex: 0 0 100%;
+    order: -1;
+    line-height: 1;
+  }
+  .chat-input :is(#questionBtn, #photoBtn, #gifBtn) {
+    min-width: 38px;
+    width: 38px;
+  }
+  .chat-input #sendBtn { padding-inline: 8px; }
+}
+
+@media (min-width: 1200px) {
+  .chat-container, .chat-input-row, .reply-preview-bar {
+    padding-inline: max(24px, calc((100% - 1120px) / 2));
+  }
+  .chat-container .message-wrapper { max-width: min(78%, 760px); }
+}

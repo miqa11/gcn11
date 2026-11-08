@@ -1,0 +1,26 @@
+html[data-gc-theme="midnight"],html[data-gc-theme="midnight"] body{
+ color-scheme:dark;--bg:#080b11;--bg2:#0e131d;--surface:#101620;--raised:#192231;--panel:#101620;--card:#101620;--border:#2b3647;--border-2:#3a485d;--text:#d9e1ed;--text-dim:#bdc8d8;--muted:#9ba9bc;--accent:#526fa8;--accent-lt:#a5bce7;--accent-dk:#354d7a;--gold:#b99b65;--gold-lt:#d1bc94;--bubble-me:#233650;--bubble-me-text:#e0e8f5;--bubble-them:#141d2a;--bubble-them-text:#d9e1ed;
+ background:#080b11!important;color:#d9e1ed;
+}
+html[data-gc-theme="midnight"] body{background-image:none!important}
+html[data-gc-theme="midnight"] :is(.top-bar,.fc-header,.chat-input,#fc-input-bar,.reg-menu-dropdown,.rc-theme-sheet,.fc-theme-sheet,.music-modal-box,.game-window,.game-menu){background:#101620!important;border-color:#2b3647!important;box-shadow:none!important;color:#d9e1ed}
+html[data-gc-theme="midnight"] :is(#chat,#fc-messages){background:#080b11!important}
+html[data-gc-theme="midnight"] :is(.message-content,.fc-row:not(.me) .fc-bubble){background:#141d2a!important;color:#d9e1ed!important;box-shadow:none!important}
+html[data-gc-theme="midnight"] :is(.message-content.you,.fc-row.me .fc-bubble){background:#233650!important;color:#e0e8f5!important}
+html[data-gc-theme="midnight"] :is(.chat-input textarea,#fc-input,.fc-theme-btn,.fc-back){background:#172131!important;color:#d9e1ed!important;border-color:#35445b!important;box-shadow:none!important}
+html[data-gc-theme="midnight"] :is(#sendBtn:not(:disabled),#fc-send){background:#354d7a!important;color:#fff!important;box-shadow:none!important}
+html[data-gc-theme="midnight"] :is(.site-name,.brand-text){background:none!important;-webkit-text-fill-color:#bdccea;color:#bdccea;text-shadow:none!important}
+html[data-gc-theme="midnight"] :is(.reg-menu-label,.reg-menu-icon,.system-message,.fc-sub,.fc-time,.timestamp){color:#aebdd1}
+.gc-theme-choice{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px 0;font-size:13px}.gc-theme-choice select{font:inherit;min-height:36px;max-width:100%;padding:6px 10px;background:var(--surface,#181d2a);color:var(--text,#e0e6ef);border:1px solid var(--border,#627088);border-radius:7px}.gc-theme-choice small{display:block;flex-basis:100%;color:var(--muted,#9aa9bc);font-size:11px}
+@media(prefers-reduced-motion:reduce){html[data-gc-theme="midnight"] .rc-bg-transition,html[data-gc-theme="midnight"] .fc-bg-transition{transition:none}}
+
+button.rc-theme-swatch{font:inherit;padding:0;text-align:initial}
+
+html[data-gc-theme="midnight"] :is(.music-widget,.music-widget-header,.music-widget-body,.fc-activities){background:#101620!important;border-color:#2b3647!important;box-shadow:none!important;color:#d9e1ed}
+html[data-gc-theme="midnight"] #startBtn{background:#263c5a!important;box-shadow:none!important;color:#e0e8f5!important}
+html[data-gc-theme="midnight"] :is(.fc-bubble,.message-content){box-shadow:none!important}
+html[data-gc-theme="midnight"] .gc-theme-choice{padding:12px}
+
+.fc-theme-sheet{max-height:calc(100dvh - 16px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box}
+
+html[data-gc-theme="midnight"] #rulesGateOverlay{background:#080b11ed!important}html[data-gc-theme="midnight"] #rulesGateOverlay>div{background:#101620!important;color:#d9e1ed;box-shadow:none!important}html[data-gc-theme="midnight"] #rulesGateAgree{background:#354d7a!important;box-shadow:none!important}
