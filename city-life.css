@@ -1,0 +1,14 @@
+.city-life-overlay{position:absolute;inset:0;z-index:92;display:flex;align-items:center;justify-content:center;background:#080919b5;padding:16px;box-sizing:border-box}
+.city-life-overlay[hidden],.city-life-hud[hidden]{display:none}
+.city-life-panel{width:min(510px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:22px;border:1px solid #80709f;border-radius:18px;background:#171629;color:#f4efff;font:13px/1.65 system-ui;box-shadow:0 20px 70px #0009}
+.city-life-panel header{display:flex;align-items:center;justify-content:space-between;gap:12px}.city-life-panel h2{font-size:23px;margin:6px 0 14px}.city-life-panel h3{font-size:15px;margin:18px 0 8px}.city-life-panel ul{padding-left:20px}.city-life-panel li{margin:6px 0;overflow-wrap:anywhere}.city-life-panel small,.life-muted{color:#c0b3d3}.life-event-name{font-size:18px;color:#ffe3a1}
+.city-life-panel button,.city-life-hud button{min-height:42px;padding:8px 12px;color:#f7f1ff;background:#41305d;border:1px solid #8c71aa;border-radius:9px;font:inherit;cursor:pointer}.city-life-panel button:focus-visible,.city-life-hud button:focus-visible{outline:3px solid #80e6d3;outline-offset:2px}.city-life-panel button:disabled,.city-life-hud button:disabled{opacity:.5;cursor:default}
+.city-life-panel progress,.city-life-hud progress{display:block;width:100%;height:8px;accent-color:#8ee3b3}
+.city-hud-stack .city-life-hud,.city-life-hud{position:relative;pointer-events:auto;box-sizing:border-box;background:#171629ed;border:1px solid #6a628a;border-radius:12px;padding:12px;width:min(300px,100%);color:#f4efff;font:12px/1.5 system-ui}
+.city-life-hud strong{display:block;padding-right:30px}.city-life-hud>button:nth-child(2){position:absolute;right:6px;top:6px;min-height:28px;padding:2px 8px}.city-life-hud p{margin:7px 0}.city-life-hud progress{margin-bottom:8px}.city-life-hud .on-beat{background:#245c4a;border-color:#97f1c8}
+@media(max-width:600px){.city-life-overlay{padding:8px}.city-life-panel{padding:16px}.city-life-panel h2{font-size:21px}.city-hud-stack .city-life-hud{padding:9px;font-size:11px;width:min(270px,100%)}.city-life-hud button{min-height:40px}}
+
+.city-minimap-wrap .city-life-map-layer{position:absolute;pointer-events:none;z-index:2}
+
+.city-app .city-hud-stack .city-life-hud{position:relative}
+.city-app .city-hud-stack .city-quick-actions{flex-wrap:wrap}

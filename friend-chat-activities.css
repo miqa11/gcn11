@@ -1,0 +1,5 @@
+.fc-activities{display:flex;align-items:center;flex-wrap:wrap;gap:6px;padding:5px 12px;background:var(--surface);border-bottom:1px solid var(--border);flex:0 0 auto}.fc-activities button{font:inherit;font-size:12px;min-height:32px;padding:5px 10px;border:1px solid var(--border);background:var(--raised,#26233f);color:var(--text);border-radius:7px}.fc-activities button:disabled{opacity:.5}.fc-activities small{font-size:10px;color:var(--muted);margin-left:auto}#fc-messages .system-message{text-align:center;font-size:12px;color:var(--muted);padding:6px;flex-shrink:0}#fc-input-bar :is(.game-invite-bar,.music-invite-bar){width:100%;flex:0 0 100%;box-sizing:border-box}body:has(.fc-activities) :is(.game-menu,.music-modal-box,.game-window){max-width:calc(100vw - 16px);box-sizing:border-box}body:has(.fc-activities) .game-menu{top:105px;max-height:calc(100dvh - 120px);overflow:auto}@media(max-width:420px){.fc-activities small{width:100%;margin:0}.fc-header .fc-expiry-badge{display:none}}
+
+#fc-input-bar:has(.game-invite-bar),#fc-input-bar:has(.music-invite-bar){flex-wrap:wrap}
+
+body:has(.fc-activities) .music-modal-box{max-height:calc(100dvh - 24px);overflow:auto}

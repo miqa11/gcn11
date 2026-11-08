@@ -1,0 +1,15 @@
+.city-quests-overlay{position:absolute;inset:0;z-index:90;background:#080715b8;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
+.city-quests-overlay[hidden]{display:none}
+.city-quests-panel{width:min(850px,100%);max-height:100%;overflow:auto;box-sizing:border-box;padding:24px;background:#171427;color:#f6f0ff;border:1px solid #796593;border-radius:20px;box-shadow:0 24px 80px #0008;font:13px/1.6 system-ui}
+.city-quests-header{display:flex;gap:16px;align-items:flex-start;justify-content:space-between}
+.city-quests-panel h2{font-size:23px;line-height:1.4;margin:6px 0}.city-quests-header small{color:#c4b4da}
+.city-quests-panel button{background:#312842;border:1px solid #766386;color:#fff;border-radius:9px;min-height:42px;padding:8px 12px;cursor:pointer;font:inherit}
+.city-quests-panel button:disabled{opacity:.5;cursor:default}.city-quests-panel button:focus-visible,.city-quests-panel a:focus-visible{outline:3px solid #7de4d4;outline-offset:2px}
+.city-quests-panel a{color:#a9f5e8}.city-quests-intro{color:#d8cfe3;max-width:680px}
+.city-quests-summary{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#272039;padding:12px;border-radius:10px;margin:16px 0}
+.city-quests-summary strong{color:#ffe19c}.city-quests-summary span{color:#cabee3}
+.city-quests-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.city-quest-card{padding:18px;background:#211b32;border:1px solid #4c3d60;border-radius:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.city-quest-card h3{font-size:17px;line-height:1.5;margin:0}.city-quest-card p{margin:0;color:#d5c9e2}.city-quest-reward{color:#ffe19c;font-weight:700}
+.city-quest-card progress{width:100%;height:8px;accent-color:#76d9b4;margin-top:auto}.city-quest-progress{color:#8fe4ca;font-size:12px}.city-quest-place{color:#c5b8d5}
+.city-quest-actions{display:flex;gap:6px;flex-wrap:wrap}.city-quests-panel .quest-claim{background:#5c3c85;border-color:#9d76c2}.city-quest-card.is-claimed{border-color:#528c78}.city-quests-note{color:#bcb1cd;font-size:12px;margin:12px 0 0}
+@media(max-width:600px){.city-quests-overlay{padding:8px}.city-quests-panel{padding:16px;border-radius:15px}.city-quests-grid{grid-template-columns:1fr}.city-quests-panel h2{font-size:20px}.city-quest-card{padding:14px}.city-quests-summary{font-size:12px}}

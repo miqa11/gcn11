@@ -1,0 +1,25 @@
+/* Keep the selected cabinet and controls together, independent of the cabinet-list scroll. */
+.city-app .arcade-window:has(.arcade-focused){height:100%;max-height:100%}
+.city-app .arcade-content.arcade-focused{flex:1;min-height:0;display:flex;flex-direction:column;gap:5px;overflow:hidden;padding:7px}
+.arcade-solo-head{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.arcade-solo-head h3{margin:0;font-size:12px}.arcade-solo-head button{margin:0}
+.arcade-focused .arcade-run{display:flex;flex:1;min-height:0;flex-direction:column;gap:5px;margin:0}
+.arcade-playfield{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#070b18}
+.city-app .arcade-playfield .arcade-run-canvas{width:100%;height:100%;max-height:100%;object-fit:contain;aspect-ratio:auto;box-sizing:border-box}
+.arcade-ready{position:absolute;inset:0;display:grid;place-content:center;background:#080d20b8}.arcade-ready[hidden]{display:none}
+.city-app .arcade-ready button{min-height:40px;padding:8px 24px;border:1px solid #9ffff0;background:#204b4a;color:#e6fff6}
+.arcade-focused .arcade-run-controls{flex:0 0 auto;gap:4px;padding:2px 0}.city-app .arcade-focused .arcade-run-controls button{min-width:0;min-height:30px;max-width:100%;padding:3px 7px;font-size:12px;white-space:normal;overflow-wrap:anywhere}
+@media(orientation:landscape) and (max-height:560px){.city-app .arcade-header{padding:4px 9px}.city-app .arcade-header small{display:none}.city-app .arcade-tabs{padding:3px 6px 0}.city-app .arcade-tabs button{min-height:26px;padding:2px 7px}.city-app .arcade-focused .arcade-solo-head button{min-height:25px;font-size:9px;padding:2px 7px}.arcade-solo-head{gap:5px}.arcade-focused .arcade-run-hud{font-size:9px}.city-app .arcade-content.arcade-focused{padding:4px;gap:3px}}
+
+/* Header actions must participate in layout rather than covering each other. */
+.city-app #cityArcadePanel .arcade-header{gap:6px}
+.city-app #cityArcadePanel .arcade-header>div{order:0;flex:1;min-width:0;padding-right:0}
+.city-app #cityArcadePanel .arcade-header>button{position:static;flex:0 0 28px;width:28px;height:28px;min-width:28px;min-height:28px;padding:0;order:2}
+.city-app #cityArcadePanel .arcade-header>.city-panel-minimize{order:1}
+@media(orientation:landscape) and (max-height:560px){
+ .arcade-window:has(.arcade-focused) .arcade-tabs{display:none}
+ .arcade-focused .arcade-run{display:grid;grid-template-columns:minmax(0,1fr) 110px;grid-template-rows:auto minmax(0,1fr)}
+ .arcade-focused .arcade-run-hud{grid-column:1/-1}
+ .arcade-focused .arcade-playfield{grid-column:1;grid-row:2;height:100%}
+ .arcade-focused .arcade-run-controls{grid-column:2;grid-row:2;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-content:center}
+}

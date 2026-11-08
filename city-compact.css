@@ -1,0 +1,97 @@
+/* Compact city controls share horizontal rows on desktop and phones. */
+.city-app #vehicleHud { display:flex; flex-wrap:wrap; align-items:center; gap:5px; width:max-content; max-width:calc(100% - 24px); }
+.city-app #vehicleHud[hidden] { display:none; }
+.city-app #vehicleHud .vehicle-kicker,.city-app #vehicleStatus { display:none; }
+.city-app #vehicleModel { font-size:10px; }
+.city-app #carOptions { flex-basis:100%; max-height:170px; padding-top:5px; }
+.city-app #carSeats { display:flex; gap:5px; overflow-x:auto; }
+.city-app #carSeats>div { flex:0 0 auto; gap:4px; font-size:10px; }
+.city-app #carSettings { display:flex; flex-wrap:wrap; gap:6px; }
+.city-app #carSettings[hidden],.city-app #gardenOptions>label:has(#gardenDanceMove) { display:none; }
+.city-app #carSettings label { flex:1; min-width:120px; font-size:10px; margin:2px 0; }
+.city-app #carOptions>small { display:none; }
+.city-app .garden-controls { width:max-content; max-width:calc(100% - 24px); }
+.city-app #gardenStatus { display:none; }
+.city-app .garden-heading { gap:5px; }
+.city-app .garden-dance-choices { display:flex; gap:4px; overflow-x:auto; margin-top:5px; }
+.city-app .garden-dance-choices button { flex:0 0 auto; font-size:10px; padding:4px 7px; min-height:30px; }
+.city-app .garden-dance-choices button[aria-pressed=true] { border-color:#ff93d8; background:#593957; }
+.city-app .garden-controls { right:auto; }
+.city-app button { min-height:34px; min-width:34px; padding:5px 9px; border-radius:6px; font-size:11px; box-shadow:none; }
+.city-quick-actions { position:absolute; top:108px; left:12px; z-index:9; display:flex; align-items:center; gap:6px; }
+.city-quick-actions button { color:#d6fff0; background:#122431ed; border:1px solid #81cdbd; cursor:pointer; white-space:nowrap; }
+.city-quick-actions .activities-launcher { position:static; padding:5px 9px; font-size:11px; }
+.city-app .city-icon-button { width:34px; height:34px; }
+.city-app .garden-controls,.city-app .city-vehicle-hud { padding:7px 9px; }
+.city-app .garden-actions,.city-app .car-actions,.city-app .activity-card-actions,.city-app #dialogActions { display:flex; flex-wrap:wrap; align-items:center; gap:5px; }
+.city-app .garden-actions button { flex:0 1 auto; }
+.city-app .touch-abilities { flex-direction:row; gap:5px; }
+.city-app .touch-abilities button { min-width:40px; min-height:36px; padding:5px 7px; }
+.city-app .touch-actions { align-items:center; gap:6px; }
+.city-app .touch-interact { width:44px; height:44px; min-width:44px; min-height:44px; border-radius:9px; }
+.city-app .activity-hud { top:151px; padding:7px 9px; }
+.city-app .activities-tabs { gap:4px; padding:6px; }
+.city-app .activities-tabs button { flex:0 1 auto; padding:5px 8px; }
+.city-app .activities-header { padding:9px 12px; }
+.city-app .activity-card { padding:9px; }
+.city-app .city-message-composer { padding:14px; width:min(360px,calc(100% - 24px)); }
+.city-app .city-message-composer textarea { font-size:16px; min-height:48px; }
+@media(max-width:700px),(any-pointer:coarse) {
+ .city-app { --touch-size:88px; --touch-action-size:44px; }
+ .city-app .garden-controls button,.city-app #vehicleHud button { min-height:34px; min-width:34px; padding:5px 8px; }
+ .city-app .garden-controls select,.city-app #vehicleHud select { min-height:34px; padding:4px; }
+ .city-app .garden-actions { flex-wrap:nowrap; }
+ .city-app .activities-tabs { flex-wrap:wrap; }
+ .city-app .city-stamina { width:102px; padding:4px 6px; }
+ .city-app .touch-interact span { display:none; }
+}
+@media(orientation:landscape) and (max-height:560px) {
+ .city-quick-actions { top:70px; }
+ .city-app .activity-hud { top:110px; }
+}
+
+/* Unboxed contextual controls; only the individual buttons have a background. */
+.city-app .city-hud-stack { position:absolute; top:112px; left:12px; right:12px; z-index:9; display:flex; flex-direction:column; align-items:flex-start; gap:7px; pointer-events:none; }
+.city-app .city-hud-stack > * { position:static; transform:none; margin:0; max-width:100%; flex-shrink:0; pointer-events:auto; }
+.city-app .city-hud-stack > [hidden] { display:none; }
+.city-app .city-hud-stack .city-toast { width:fit-content; text-align:left; }
+.city-app .city-hud-stack .city-quick-actions { padding-top:3px; }
+.city-app .city-hud-stack .activity-hud { width:min(360px,100%); max-height:35vh; overflow:auto; }
+.city-app .city-context-actions { position:absolute; left:12px; right:12px; bottom:125px; z-index:4; display:flex; flex-direction:column; align-items:flex-start; gap:6px; pointer-events:none; }
+.city-app .city-context-actions #vehicleHud,.city-app .city-context-actions #gardenControls { position:static; width:auto; min-width:0; max-width:100%; max-height:30vh; padding:0; margin:0; border:0; border-radius:0; background:none; box-shadow:none; overflow:auto; pointer-events:auto; }
+.city-app .city-context-actions #vehicleModel,.city-app .city-context-actions .garden-heading,.city-app .city-context-actions #gardenSay { display:none; }
+.city-app .city-context-actions #vehicleHud button,.city-app .city-context-actions #vehicleHud select,.city-app .city-context-actions button,.city-app .city-context-actions select { min-height:26px; min-width:26px; height:auto; padding:3px 6px; font-size:10px; border-radius:4px; line-height:18px; white-space:nowrap; }
+.city-app .city-context-actions .garden-actions { flex-wrap:nowrap; overflow-x:auto; max-width:100%; gap:4px; margin:0; padding:2px 0; }
+.city-app .city-context-actions .garden-actions button { flex:0 0 auto; }
+.city-app .city-context-actions .garden-dance-choices { display:contents; }
+.city-app .city-context-actions #carOptions { border:0; padding:2px 0; }
+.city-app .city-context-actions #carSeats { max-width:100%; }
+.city-app .city-context-actions #carSeats>div { min-height:26px; }
+.city-app .city-context-actions #gardenOptions { margin-top:4px; }
+.city-app .city-context-actions #gardenOptions>small { display:none; }
+.city-app .city-context-actions #carSettings label { margin:2px 0; }
+.city-app .city-context-actions #carOptions .car-actions { margin:3px 0; }
+.city-app .city-context-actions button:focus-visible { outline:2px solid #fff; outline-offset:-2px; }
+@media(max-width:700px),(any-pointer:coarse) {
+ .city-app .city-context-actions { bottom:calc(var(--touch-size,88px) + 76px); }
+ .city-app .city-hud-stack .city-quick-actions button { min-height:28px; padding:3px 7px; font-size:10px; }
+}
+@media(orientation:landscape) and (max-height:560px) {
+ .city-app .city-hud-stack { top:72px; left:10px; right:10px; gap:4px; }
+ .city-app .city-context-actions { left:calc(var(--touch-size,88px) + 20px); right:calc(var(--touch-action-size,44px) + 20px); bottom:8px; }
+ .city-app .city-hud-stack .garden-wayfinder { display:none; }
+}
+
+/* A tracked destination occupies one short row; details are explicitly expandable. */
+.city-app .city-hud-stack #cityActivityHud { width:max-content; max-width:100%; padding:0; border:0; border-radius:0; background:none; box-shadow:none; }
+.city-app #cityActivityHud .activity-hud-head { gap:4px; width:max-content; max-width:100%; }
+.city-app #cityActivityHud .activity-toggle { min-width:0; max-width:210px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-height:26px; padding:3px 6px; font-size:10px; line-height:18px; }
+.city-app #cityActivityHud .activity-distance-short { flex-shrink:0; font-size:9px; color:#fff2c2; background:#10192ade; border-radius:3px; padding:3px; }
+.city-app #cityActivityHud .activity-dismiss { min-height:26px; min-width:26px; padding:0; line-height:24px; background:#10192ade; }
+.city-app #cityActivityHud .activity-hud-details { width:min(330px,calc(100vw - 24px)); box-sizing:border-box; margin-top:4px; padding:7px; border-radius:5px; background:#10192af2; max-height:27vh; overflow:auto; }
+.city-app #cityActivityHud .activity-hud-details[hidden] { display:none; }
+.city-app #cityActivityHud .activity-instruction { margin:0 0 4px; font-size:10px; }
+.city-app #cityActivityHud .activity-distance { margin:3px 0; font-size:9px; }
+.city-app #cityActivityHud .activity-play { gap:4px; }
+.city-app #cityActivityHud .activity-play button { min-height:28px; padding:4px 7px; font-size:10px; }
+@media(max-width:360px) { .city-app #cityActivityHud .activity-toggle { max-width:165px; } }

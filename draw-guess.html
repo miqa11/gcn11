@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <script src="/safari-fix.js"></script>
+  <title>GAICANI – დახატე და გამოიცანი</title>
+  <meta name="theme-color" content="#17181d" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="icon" type="image/png" href="/logo.png" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    button, a, [role="button"] { touch-action: manipulation; }
+
+    :root {
+      --bg:        #17181d;
+      --surface:   #26272e;
+      --surface-2: #2f3037;
+      --border:    rgba(255,255,255,0.08);
+      --accent:    #5865f2;
+      --accent-lt: #8b93ff;
+      --text:      #e4e5ea;
+      --muted:     #7d81a0;
+      --good:      #3ba55d;
+      --warn:      #faa61a;
+      --danger:    #f23f42;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-top: env(safe-area-inset-top, 0px);
+    }
+
+    html, body {
+      height: 100%; height: 100dvh;
+      height: var(--app-height, 100dvh);
+      background: radial-gradient(circle at 50% 0%, #22232c 0%, #17181d 55%);
+      color: var(--text);
+      font-family: "Segoe UI", Arial, sans-serif;
+      overflow: hidden;
+      -webkit-text-size-adjust: 100%;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: contain;
+    }
+
+    #app { position: relative; display: flex; flex-direction: column; height: 100%; height: 100dvh; height: var(--app-height, 100dvh); }
+    :root.gc-keyboard-open #app { position: fixed; inset: var(--gc-viewport-top) 0 auto; }
+
+    .dg-loading, .dg-center-screen {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      height: 100%; gap: 14px; text-align: center; padding: 24px;
+    }
+    .dg-loading.hidden, .dg-center-screen.hidden { display: none; }
+    .spinner {
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 3px solid var(--border); border-top-color: var(--accent-lt);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .dg-center-screen a { color: var(--accent-lt); text-decoration: none; font-weight: 600; }
+
+    .dg-screen { display: none; flex-direction: column; height: 100%; overflow: hidden; }
+    .dg-screen.visible { display: flex; }
+
+    .dg-header {
+      display: flex; align-items: center; gap: 10px;
+      min-height: 54px; flex-shrink: 0; padding: 0 14px;
+      padding-left: max(14px, env(safe-area-inset-left));
+      padding-right: max(14px, env(safe-area-inset-right));
+      padding-top: env(safe-area-inset-top);
+      background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .dg-back { color: var(--text); text-decoration: none; font-size: 1.3em; opacity: 0.85; padding: 4px; }
+    .dg-title { font-weight: 700; font-size: 1.02em; }
+
+    /* ── Setup screen (friend picker) ───────────────────────────── */
+    .dg-setup-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+    .dg-setup-hint { color: var(--muted); font-size: 0.9em; line-height: 1.5; }
+    .dg-friend-pick-list { display: flex; flex-direction: column; gap: 8px; }
+    .dg-friend-pick-row {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 12px; cursor: pointer; -webkit-user-select: none; user-select: none;
+    }
+    .dg-friend-pick-row.selected { border-color: var(--accent); background: rgba(88,101,242,0.12); }
+    .dg-pick-avatar {
+      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+      background: var(--accent); color: #fff; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; font-size: 0.9em;
+      overflow: hidden;
+    }
+    .dg-pick-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .dg-pick-name { flex: 1; font-weight: 600; font-size: 0.95em; }
+    .dg-pick-check {
+      width: 20px; height: 20px; border-radius: 6px; border: 2px solid var(--muted);
+      flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75em;
+    }
+    .dg-friend-pick-row.selected .dg-pick-check { background: var(--accent); border-color: var(--accent); }
+    .dg-empty-state { color: var(--muted); font-size: 0.9em; text-align: center; padding: 30px 10px; }
+
+    /* ── Active games browser (join a room someone else already started) ── */
+    .dg-section-label {
+      color: var(--muted); font-size: 0.72em; font-weight: 700;
+      letter-spacing: 0.06em;
+      margin-top: 6px;
+    }
+    .dg-public-room-list { display: flex; flex-direction: column; gap: 8px; }
+    .dg-public-room-row {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .dg-public-room-info { flex: 1; min-width: 0; }
+    .dg-public-room-host { font-weight: 600; font-size: 0.92em; }
+    .dg-public-room-meta { color: var(--muted); font-size: 0.78em; margin-top: 2px; }
+    .dg-room-status-badge {
+      font-size: 0.68em; font-weight: 700; letter-spacing: 0.03em;
+      padding: 2px 7px; border-radius: 20px; flex-shrink: 0;
+    }
+    .dg-room-status-badge.lobby   { background: rgba(88,101,242,0.16); color: var(--accent-lt); }
+    .dg-room-status-badge.playing { background: rgba(59,165,93,0.16); color: var(--good); }
+    .dg-join-room-btn {
+      background: var(--accent); color: #fff; border: none; border-radius: 8px;
+      padding: 8px 14px; font-size: 0.84em; font-weight: 700; cursor: pointer; flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .dg-join-room-btn:hover { background: #4752c4; }
+
+    .dg-btn-primary {
+      background: var(--accent); color: #fff; border: none; border-radius: 10px;
+      padding: 13px; font-size: 0.98em; font-weight: 700; cursor: pointer;
+      transition: background 0.15s, opacity 0.15s;
+    }
+    .dg-btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+    .dg-btn-primary:not(:disabled):active { background: #4752c4; }
+
+    /* ── Invite button — sits outside the scrollable friend list so it's
+       always visible/reachable, not buried below a long online-friends
+       list you'd otherwise have to scroll past. ── */
+    .dg-invite-bar-fixed {
+      flex-shrink: 0; padding: 12px 16px; border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .dg-invite-bar-fixed .dg-btn-primary { width: 100%; }
+
+    /* ── Lobby screen ────────────────────────────────────────────── */
+    .dg-lobby-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+    .dg-lobby-players { display: flex; flex-direction: column; gap: 8px; }
+    .dg-lobby-player {
+      display: flex; align-items: center; gap: 10px;
+      background: var(--surface); border-radius: 10px; padding: 10px 12px;
+      border: 1px solid var(--border);
+    }
+    .dg-lobby-player .dg-pick-avatar { background: var(--surface-2); color: var(--text); }
+    .dg-lobby-player.host .dg-pick-avatar { background: var(--warn); color: #1e1f22; }
+    .dg-lobby-tag { font-size: 0.72em; color: var(--muted); }
+    .dg-hint { color: var(--muted); font-size: 0.88em; text-align: center; }
+    .dg-invite-more-btn {
+      background: none; border: 1px dashed var(--border); color: var(--accent-lt);
+      border-radius: 10px; padding: 10px; font-size: 0.9em; font-weight: 600; cursor: pointer;
+    }
+
+    /* ── Play screen ─────────────────────────────────────────────── */
+    .dg-play-screen { background: var(--bg); }
+    .dg-play-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      height: 50px; flex-shrink: 0; padding: 0 14px;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      font-size: 0.85em;
+    }
+    .dg-round-info { color: var(--muted); font-weight: 600; }
+    .dg-timer {
+      font-weight: 800; font-size: 1.15em; color: var(--accent-lt);
+      min-width: 32px; text-align: center;
+    }
+    .dg-timer.low { color: var(--danger); }
+    .dg-drawer-info { color: var(--muted); text-align: right; }
+    .dg-drawer-info strong { color: var(--text); }
+
+    .dg-word-hint {
+      text-align: center; padding: 10px 8px 4px;
+      font-size: 1.3em; font-weight: 700; letter-spacing: 4px;
+      min-height: 1.6em; flex-shrink: 0;
+      overflow-wrap: anywhere;
+    }
+    .dg-word-hint.is-word { color: var(--warn); letter-spacing: 1px; font-size: 1.15em; }
+
+    .dg-canvas-wrap {
+      position: relative; flex-shrink: 0;
+      margin: 0 auto; width: 100%; max-width: 520px; padding: 0 12px;
+    }
+    #dgCanvas {
+      /* Upright phones: fitCanvas() below sets the exact size so the drawing
+         takes whatever space is left and the guess box stays on screen. */
+      width: 100%; margin: 0 auto;
+      height: auto; aspect-ratio: 4 / 3;
+      background: #f5f5f7; border-radius: 12px; display: block;
+      touch-action: none; box-shadow: 0 4px 18px rgba(0,0,0,0.35);
+    }
+    #shapePreview { position: absolute; pointer-events: none; }
+    .dg-settings { width: 100%; max-width: 520px; padding: 10px; }
+    .dg-settings summary { cursor: pointer; }
+    .dg-settings-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr)); gap: 8px; margin-top: 10px;
+    }
+    .dg-settings label { display: grid; gap: 4px; min-width: 0; }
+    .dg-settings select, .dg-settings input, .dg-settings textarea, #drawTool {
+      min-width: 0; max-width: 100%; background: var(--surface-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; padding: 6px; font: inherit; font-size: 16px;
+    }
+    .dg-settings .dg-custom-words { grid-column: 1 / -1; }
+    .dg-settings .dg-custom-only { display: flex; align-items: center; }
+    .dg-tool-options { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+    #drawColor { width: 34px; height: 34px; padding: 0; background: transparent; border: 0; cursor: pointer; }
+    #playScreen { overflow-y: auto; }
+    .dg-overlay {
+      /* Grows past a small canvas instead of cutting its buttons off. */
+      position: absolute; inset: 0 12px auto; min-height: 100%; z-index: 5; border-radius: 12px;
+      background: rgba(23,24,29,0.92); display: flex; align-items: center; justify-content: center; padding: 16px;
+    }
+    .dg-overlay-card { text-align: center; width: 100%; }
+    .dg-overlay-title { font-size: 1.15em; font-weight: 800; margin-bottom: 12px; }
+    .dg-overlay-detail { color: var(--muted); font-size: 0.9em; }
+    .dg-word-choice-buttons { display: flex; flex-direction: column; gap: 8px; }
+    .dg-word-choice-btn {
+      background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 10px; padding: 11px; font-size: 1em; font-weight: 700; cursor: pointer;
+    }
+    @media (max-height: 640px) {
+      .dg-overlay { padding: 10px; }
+      .dg-overlay-title { margin-bottom: 8px; font-size: 1.05em; }
+      .dg-word-choice-btn { padding: 9px; }
+    }
+    .dg-word-choice-btn:active { background: var(--accent); }
+
+    .dg-tools {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 10px; flex-shrink: 0;
+      padding: 10px 12px; max-width: 520px; width: 100%; margin: 0 auto;
+    }
+    .dg-colors { display: flex; gap: 5px; flex-wrap: wrap; flex: 1; }
+    .dg-color-swatch {
+      width: 22px; height: 22px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15);
+      cursor: pointer; flex-shrink: 0;
+    }
+    .dg-color-swatch.active { border-color: #fff; transform: scale(1.15); }
+    #brushSize { width: 70px; flex-shrink: 0; }
+    .dg-tool-btn {
+      background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; width: 32px; height: 32px; font-size: 0.95em; cursor: pointer; flex-shrink: 0;
+    }
+    .dg-tool-btn[aria-pressed="true"] { border-color: var(--accent); background: rgba(88,101,242,0.25); }
+    .dg-tool-btn:disabled { opacity: 0.4; cursor: default; }
+
+    .dg-scoreboard {
+      display: flex; gap: 6px; overflow-x: auto; flex-shrink: 0;
+      padding: 8px 12px; -webkit-overflow-scrolling: touch;
+    }
+    .dg-score-chip {
+      display: flex; align-items: center; gap: 5px; flex-shrink: 0;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+      padding: 4px 10px 4px 4px; font-size: 0.8em;
+    }
+    .dg-score-chip.drawing { border-color: var(--warn); }
+    .dg-score-chip.disconnected { opacity: 0.4; }
+    .dg-score-chip.got-it { border-color: var(--good); }
+    .dg-score-avatar {
+      width: 20px; height: 20px; border-radius: 50%; background: var(--surface-2);
+      display: flex; align-items: center; justify-content: center; font-size: 0.7em; font-weight: 700;
+    }
+    .dg-score-val { font-weight: 700; color: var(--accent-lt); }
+
+    .dg-chat {
+      flex: 1; overflow-y: auto; padding: 4px 14px; display: flex; flex-direction: column; gap: 5px;
+      font-size: 0.86em; min-height: 0;
+    }
+    .dg-chat-line { color: var(--text); }
+    .dg-chat-line .u { font-weight: 700; color: var(--accent-lt); }
+    .dg-chat-line.correct { color: var(--good); font-weight: 700; }
+    .dg-chat-line.system { color: var(--muted); font-style: italic; text-align: center; }
+
+    .dg-guess-bar {
+      display: flex; gap: 8px; flex-shrink: 0; padding: 10px 12px calc(10px + var(--safe-bottom));
+      padding-left: max(12px, env(safe-area-inset-left));
+      padding-right: max(12px, env(safe-area-inset-right));
+      background: var(--surface); border-top: 1px solid var(--border);
+    }
+    /* Same kind of box as random chat's message field: a one-line textarea
+       that grows to a second line for a long guess. */
+    #guessInput {
+      flex: 1; min-width: 0; background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 20px; padding: 10px 16px; font-size: 0.95em; outline: none;
+      font-family: inherit; line-height: 1.35; resize: none; overflow-y: hidden;
+      height: auto; min-height: 42px; max-height: 84px; display: block;
+      -webkit-text-fill-color: var(--text); caret-color: var(--accent-lt);
+    }
+    #guessInput::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); }
+    .dg-guess-bar { align-items: flex-end; }
+    #guessSend { min-height: 42px; }
+    #guessInput:focus { border-color: var(--accent); }
+    /* iPhone/iPad Safari zooms the page into any text field under 16px. */
+    @media (pointer: coarse) { #guessInput { font-size: 16px; } }
+
+    /* ── Sideways phones: canvas on the left at full height, word / tools /
+       scores / chat / guess box on the right. Stacked, the canvas alone was
+       taller than the screen and pushed the tools and the guess box off the
+       bottom — guessing was impossible. ── */
+    /* Switch columns only when the keyboard is closed. */
+    html.dg-sideways #playScreen.visible {
+      display: grid;
+      grid-template-columns: minmax(0, 52%) minmax(0, 1fr);
+      grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+    }
+    html.dg-sideways #playScreen > .dg-play-header { grid-column: 1 / -1; grid-row: 1; }
+    html.dg-sideways #playScreen > .dg-canvas-wrap {
+      grid-column: 1; grid-row: 2 / -1; align-self: start;
+      width: 100%; max-width: none; padding: 6px 0 8px 10px;
+    }
+    html.dg-sideways #playScreen .dg-overlay { inset: 6px 0 auto 10px; }
+    html.dg-sideways #playScreen > .dg-word-hint  { grid-column: 2; grid-row: 2; }
+    html.dg-sideways #playScreen > .dg-tools      { grid-column: 2; grid-row: 3; flex-wrap: wrap; }
+    html.dg-sideways #playScreen > .dg-scoreboard { grid-column: 2; grid-row: 4; }
+    html.dg-sideways #playScreen > .dg-chat       { grid-column: 2; grid-row: 5; }
+    html.dg-sideways #playScreen > .dg-guess-hint { grid-column: 2; grid-row: 6; }
+    html.dg-sideways #playScreen > .dg-guess-bar  { grid-column: 2; grid-row: 7; }
+
+    /* Upright touch screens: finger-sized drawing tools — two rows of colour
+       pills, then the brush size and the 🪣 ↩️ 🗑️ buttons. */
+    @media (pointer: coarse) {
+      html:not(.dg-sideways) .dg-tools { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+      html:not(.dg-sideways) .dg-colors { flex: 1 1 100%; display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+      html:not(.dg-sideways) .dg-color-swatch { width: auto; height: 32px; border-radius: 10px; }
+      html:not(.dg-sideways) .dg-color-swatch.active { transform: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px #fff; }
+      html:not(.dg-sideways) #brushSize { flex: 1; width: auto; height: 32px; }
+      html:not(.dg-sideways) .dg-tool-btn { width: 46px; height: 40px; font-size: 1.15em; border-radius: 10px; }
+    }
+    .dg-tool-btn, .dg-color-swatch, #guessSend, .dg-word-choice-btn { touch-action: manipulation; }
+
+    /* Typing a guess on a phone (html.dg-kb): the keyboard takes most of the
+       screen, so keep only what matters — the drawing, the word and the
+       guess box right above the keyboard. */
+    html.dg-kb #playScreen.visible {
+      display: flex; overflow-y: auto; padding-bottom: var(--dg-composer-height, 60px);
+    }
+    html.dg-kb #playScreen .dg-play-header { display: none; }
+    .dg-kb-timer { display: none; }
+    html.dg-kb .dg-kb-timer {
+      display: grid; place-items: center; flex-shrink: 0; min-width: 40px; height: 40px; align-self: center;
+      border-radius: 50%; font-weight: 800; color: var(--accent-lt); background: var(--surface-2); border: 1px solid var(--border);
+    }
+    html.dg-kb .dg-kb-timer.low { color: var(--danger); border-color: var(--danger); }
+    html.dg-kb #playScreen .dg-word-hint { padding: 3px 8px 2px; font-size: 1.1em; min-height: 0; }
+    html.dg-kb #playScreen .dg-scoreboard,
+    html.dg-kb #playScreen .dg-guess-hint { display: none !important; }
+    html.dg-kb #playScreen .dg-guess-bar {
+      position: absolute; inset: auto 0 0; z-index: 10; padding-top: 6px; padding-bottom: 6px;
+    }
+    html.dg-kb #playScreen .dg-canvas-wrap { max-width: none; padding: 2px 12px 0; }
+    html.dg-kb #dgCanvas { touch-action: pan-y; }
+    html.dg-kb #dgChat { flex: 1 0 52px; }
+    @media (max-width: 350px) {
+      #guessInput { padding-inline: 10px; }
+      #guessSend { padding-inline: 9px; }
+      html.dg-kb .dg-kb-timer { min-width: 32px; height: 32px; }
+    }
+    #app, .dg-screen { max-width: 100vw; overflow-x: hidden; }
+    #guessSend {
+      background: var(--accent); color: #fff; border: none; border-radius: 20px;
+      padding: 0 18px; font-weight: 700; cursor: pointer;
+    }
+    #guessSend:disabled { opacity: 0.4; }
+    .dg-guess-hint {
+      font-size: 0.72em; color: var(--muted); text-align: center;
+      padding: 4px 12px 0; flex-shrink: 0; background: var(--surface);
+    }
+
+    /* ── End screen ──────────────────────────────────────────────── */
+    #endScreen .dg-header { justify-content: center; }
+    .dg-leaderboard { flex: 1; overflow-y: auto; padding: 20px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .dg-lb-row {
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+    }
+    .dg-lb-row:first-child { border-color: var(--warn); background: rgba(250,166,26,0.10); }
+    .dg-lb-rank { font-weight: 800; font-size: 1.1em; color: var(--muted); width: 26px; }
+    .dg-lb-row:first-child .dg-lb-rank { color: var(--warn); }
+    .dg-lb-name { flex: 1; font-weight: 700; }
+    .dg-lb-score { font-weight: 800; color: var(--accent-lt); }
+    #endScreen .dg-btn-primary { margin: 0 16px calc(16px + var(--safe-bottom)); text-align: center; text-decoration: none; }
+
+    /* ── Cross-page invite bar (shown while this page is open and a NEW
+       invite arrives for a different room than the one we're in) ──────── */
+    .dg-invite-bar {
+      position: fixed; left: 12px; right: 12px; bottom: calc(12px + var(--safe-bottom));
+      background: var(--surface); border: 1px solid var(--accent); border-radius: 12px;
+      padding: 12px 14px; display: flex; align-items: center; gap: 10px; z-index: 50;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+    }
+    .dg-invite-bar span { flex: 1; font-size: 0.88em; }
+    .dg-invite-bar button {
+      border: none; border-radius: 8px; padding: 7px 12px; font-weight: 700; font-size: 0.85em; cursor: pointer;
+    }
+    .dg-invite-accept { background: var(--good); color: #fff; }
+    .dg-invite-decline { background: var(--surface-2); color: var(--text); }
+
+    #dg-toast {
+      position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%) translateY(20px);
+      background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+      padding: 10px 18px; border-radius: 20px; font-size: 0.88em;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; z-index: 60;
+      max-width: 90vw; text-align: center;
+    }
+    #dg-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  
+    /* ── iOS input zoom fix ──────────────────────────────────────────────
+       Safari on iPhone zooms the page in when an input under 16px gets
+       focus, and leaves you zoomed. Scoped to touch devices so desktop
+       sizing is unchanged. */
+    @media (pointer: coarse) {
+      #guessInput {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <div id="dgLoading" class="dg-loading"><div class="spinner"></div></div>
+
+  <div id="dgAuthScreen" class="dg-center-screen hidden">
+    <p>ამ თამაშისთვის საჭიროა შესვლა.</p>
+    <a href="/dashboard.html#games">← დაბრუნება</a>
+  </div>
+
+  <!-- SETUP: pick friends to invite -->
+  <div id="setupScreen" class="dg-screen">
+    <header class="dg-header">
+      <a href="/dashboard.html#games" class="dg-back">←</a>
+      <div class="dg-title">🎨 დახატე და გამოიცანი</div>
+    </header>
+    <div class="dg-invite-bar-fixed">
+      <button id="createRoomBtn" class="dg-btn-primary">ლობი შექმენი</button>
+    </div>
+    <div class="dg-setup-body">
+      <p class="dg-setup-hint">აირჩიე ონლაინ მოთამაშეები — ერთი ხატავს, დანარჩენები იცნობენ სიტყვას.</p>
+      <div id="onlineFriendsList" class="dg-friend-pick-list"></div>
+
+      <div class="dg-section-label">🎮 აქტიური თამაშები — შემოუერთდი</div>
+      <div id="publicRoomList" class="dg-public-room-list">
+        <div class="dg-empty-state">ახლა არცერთი თამაში არ მიმდინარეობს.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOBBY -->
+  <div id="lobbyScreen" class="dg-screen">
+    <header class="dg-header">
+      <a href="/dashboard.html#games" class="dg-back">←</a>
+      <div class="dg-title">ლობი</div>
+    </header>
+    <div class="dg-lobby-body">
+      <div id="lobbyPlayers" class="dg-lobby-players"></div>
+      <div id="lobbyInviteMoreWrap"></div>
+      <button id="copyDrawInvite" type="button" class="dg-invite-more-btn">მოსაწვევი ბმულის კოპირება</button>
+      <details id="drawSettings" class="dg-settings" hidden>
+        <summary>თამაშის პარამეტრები</summary>
+        <div class="dg-settings-grid">
+          <label>ხატვის დრო (წმ)<input id="drawSeconds" type="number" min="20" max="180" placeholder="80"></label>
+          <label>ხატვის რიგები თითო მოთამაშეზე<input id="drawCycles" type="number" min="1" max="5" value="1"></label>
+          <label>ასარჩევი სიტყვები<input id="drawChoices" type="number" min="1" max="5" value="3"></label>
+          <label>მინიშნებები<input id="drawHints" type="number" min="0" max="4" value="2"></label>
+          <label>სიტყვის რეჟიმი<select id="drawMode">
+            <option value="normal">ჩვეულებრივი</option><option value="hidden">დამალული</option><option value="mixed">შერეული</option>
+          </select></label>
+          <label class="dg-custom-words">შენი სიტყვები (მძიმით გამოყავი)<textarea id="drawCustomWords" maxlength="6000" rows="2"></textarea></label>
+          <label class="dg-custom-only"><input id="drawCustomOnly" type="checkbox"> მხოლოდ ჩემი სიტყვები</label>
+        </div>
+      </details>
+      <button id="startGameBtn" class="dg-btn-primary" style="display:none">თამაშის დაწყება</button>
+      <p id="lobbyWaitHint" class="dg-hint"></p>
+    </div>
+  </div>
+
+  <!-- PLAY -->
+  <div id="playScreen" class="dg-screen dg-play-screen">
+    <header class="dg-play-header">
+      <div class="dg-round-info">რაუნდი <span id="roundNum">1</span>/<span id="roundTotal">—</span></div>
+      <div class="dg-timer" id="dgTimer">—</div>
+      <div class="dg-drawer-info">ხატავს: <strong id="drawerName">—</strong></div>
+    </header>
+
+    <div class="dg-word-hint" id="wordHint"></div>
+
+    <div class="dg-canvas-wrap">
+      <canvas id="dgCanvas" width="640" height="480"></canvas>
+      <canvas id="shapePreview" width="640" height="480" aria-hidden="true" hidden></canvas>
+      <div id="wordChoiceOverlay" class="dg-overlay" style="display:none">
+        <div class="dg-overlay-card">
+          <div class="dg-overlay-title">აირჩიე სიტყვა</div>
+          <div id="wordChoiceButtons" class="dg-word-choice-buttons"></div>
+        </div>
+      </div>
+      <div id="roundEndOverlay" class="dg-overlay" style="display:none">
+        <div class="dg-overlay-card">
+          <div class="dg-overlay-title" id="roundEndWord"></div>
+          <div id="roundEndDetail" class="dg-overlay-detail"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="drawTools" class="dg-tools" style="display:none">
+      <div class="dg-colors" id="dgColors"></div>
+      <div class="dg-tool-options">
+        <select id="drawTool" aria-label="ხატვის ხელსაწყო">
+          <option value="brush">ფუნჯი</option><option value="eraser">საშლელი</option>
+          <option value="line">ხაზი</option><option value="rectangle">მართკუთხედი</option>
+          <option value="ellipse">ელიფსი</option>
+        </select>
+        <input type="color" id="drawColor" value="#000000" aria-label="აირჩიე ფერი">
+      </div>
+      <input type="range" id="brushSize" min="2" max="40" value="5" aria-label="ფუნჯის ზომა" title="ფუნჯის ზომა" />
+      <button id="fillToolBtn" type="button" class="dg-tool-btn" title="შევსება" aria-label="შევსება" aria-pressed="false">🪣</button>
+      <button id="undoBtn" class="dg-tool-btn" title="ბოლო მოქმედების გაუქმება" disabled>↩️</button>
+      <button id="clearCanvasBtn" class="dg-tool-btn" title="გასუფთავება">🗑️</button>
+    </div>
+
+    <div class="dg-scoreboard" id="scoreboard"></div>
+    <div class="dg-chat" id="dgChat"></div>
+
+    <div class="dg-guess-hint" id="dgGuessHint" style="display:none">✍️ დაწერე ვარაუდი ქართული კლავიატურით</div>
+    <div class="dg-guess-bar" id="guessBar" style="display:none">
+      <span class="dg-kb-timer" id="dgKbTimer" aria-hidden="true"></span>
+      <textarea id="guessInput" placeholder="დაწერე შენი ვარაუდი..." autocomplete="off" autocorrect="off" autocapitalize="sentences" spellcheck="false" inputmode="text" enterkeyhint="send" rows="1" maxlength="60"></textarea>
+      <button id="guessSend">გაგზავნა</button>
+    </div>
+  </div>
+
+  <!-- END -->
+  <div id="endScreen" class="dg-screen">
+    <header class="dg-header"><div class="dg-title">თამაში დასრულდა 🏆</div></header>
+    <div id="finalLeaderboard" class="dg-leaderboard"></div>
+    <a href="/dashboard.html#games" class="dg-btn-primary">თამაშებში დაბრუნება</a>
+  </div>
+
+</div>
+
+<div id="dgInviteBar" class="dg-invite-bar" style="display:none"></div>
+<div id="dg-toast"></div>
+
+<script src="/ban-notice.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+<script src="/lobby-kick.js"></script>
+<script src="/rematch.js"></script>
+<script>
+  // ── Phone layout ───────────────────────────────────────────────────────
+  // dg-sideways: side-by-side layout for short or wide viewports.
+  // dg-kb: typing a guess on a touch screen (compact layout).
+  // Keep the drawing at its normal size while the keyboard is visible.
+  (function () {
+    const root = document.documentElement;
+    const canvas = document.getElementById("dgCanvas");
+    const play = document.getElementById("playScreen");
+    const guessBar = document.getElementById("guessBar");
+    let normalBoard;
+    function fitCanvas(sideways, keyboard) {
+      if (!play.classList.contains("visible")) return;
+      const wrap = canvas.parentElement;
+      const style = getComputedStyle(wrap);
+      const paddingX = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
+      const paddingY = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+      let width = wrap.clientWidth - paddingX;
+      if (keyboard) {
+        if (normalBoard?.viewportWidth === root.clientWidth) width = Math.min(width, normalBoard.width);
+        root.style.setProperty("--dg-composer-height", guessBar.offsetHeight + "px");
+      } else {
+        let used = 0;
+        if (sideways) {
+          used = play.querySelector(".dg-play-header").offsetHeight;
+        } else {
+          for (const el of play.children) {
+            if (el !== wrap && el.id !== "dgChat") used += el.offsetHeight;
+          }
+          used += 56; // Reserve space for the latest guesses.
+        }
+        width = Math.min(width, Math.max(80, (play.clientHeight - used - paddingY) * 4 / 3));
+        normalBoard = { width, viewportWidth: root.clientWidth };
+      }
+      canvas.style.width = Math.max(0, Math.floor(width)) + "px";
+    }
+    let queued = false;
+    function updateLayout() {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(function () {
+        queued = false;
+        const keyboard = document.activeElement?.id === "guessInput" && window.GaicaniViewport.read().keyboard;
+        const sideways = !keyboard && innerWidth >= 450 && innerWidth > innerHeight && (innerHeight <= 500 || innerWidth >= 850);
+        const wasKeyboard = root.classList.contains("dg-kb");
+        root.classList.toggle("dg-kb", keyboard);
+        root.classList.toggle("dg-sideways", sideways);
+        fitCanvas(sideways, keyboard);
+        if (wasKeyboard && !keyboard) play.scrollTop = 0;
+      });
+    }
+    window.dgUpdateLayout = updateLayout;
+    window.addEventListener("resize", updateLayout);
+    window.addEventListener("orientationchange", function () { setTimeout(updateLayout, 250); });
+    window.GaicaniViewport.subscribe(({ height }) => {
+      root.style.setProperty("--app-height", height + "px");
+      updateLayout();
+    });
+    if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener("change", updateLayout);
+    document.addEventListener("focusin", updateLayout);
+    document.addEventListener("focusout", function () { setTimeout(updateLayout, 50); });
+    document.addEventListener("DOMContentLoaded", function () {
+      var play = document.getElementById("playScreen");
+      if (window.ResizeObserver && play) {
+        var ro = new ResizeObserver(updateLayout);
+        ro.observe(play);
+        for (var i = 0; i < play.children.length; i++) {
+          var el = play.children[i];
+          if (!el.classList.contains("dg-canvas-wrap") && el.id !== "dgChat") ro.observe(el);
+        }
+      }
+      updateLayout();
+    });
+  })();
+
+</script>
+<script>
+(function () {
+  "use strict";
+
+  /* ── Helpers ─────────────────────────────────────────────────── */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
+  }
+  function $(id) { return document.getElementById(id); }
+  function showToast(msg, ms = 3000) {
+    const t = $("dg-toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove("show"), ms);
+  }
+  function loadAuth() {
+    try {
+      return { token: localStorage.getItem("gaicani_auth_token"), username: localStorage.getItem("gaicani_auth_user") };
+    } catch (_) { return {}; }
+  }
+  function getRoomParam() {
+    const u = new URLSearchParams(window.location.search);
+    return (u.get("room") || "").trim();
+  }
+
+  const { token, username } = loadAuth();
+  let myUsernameLower = (username || "").toLowerCase();
+
+  const elLoading = $("dgLoading");
+  const elAuth    = $("dgAuthScreen");
+  const screens   = { setup: $("setupScreen"), lobby: $("lobbyScreen"), play: $("playScreen"), end: $("endScreen") };
+
+  function showScreen(name) {
+    Object.entries(screens).forEach(([k, el]) => el.classList.toggle("visible", k === name));
+    window.dgUpdateLayout?.();
+  }
+
+  /* ── State ───────────────────────────────────────────────────── */
+  let socket = null;
+  let currentRoomId = getRoomParam() || null;
+  let isHost = false;
+  let isDrawer = false;
+  let myFriendsLc = new Set();
+  let selectedFriends = new Set();
+  let onlineFriends = [];      // [{username}]
+  let lastRoomPlayers = [];    // from drawGuess:room
+  let timerInterval = null;
+  let currentColor = "#000000";
+  let currentSize = 5;
+  let hasGuessedThisRound = false;
+
+  const COLORS = ["#000000","#ffffff","#6b7280","#ef4444","#f97316","#eab308","#22c55e","#3b82f6","#6366f1","#a855f7","#ec4899","#78350f"];
+
+  /* ── Canvas ──────────────────────────────────────────────────── */
+  const canvas = $("dgCanvas");
+  const ctx = canvas.getContext("2d");
+  const LOGICAL_W = 640, LOGICAL_H = 480;
+
+  const BOARD_COLOR = "#f5f5f7";
+  const preview = $("shapePreview");
+  const previewCtx = preview.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = LOGICAL_W * dpr;
+  canvas.height = LOGICAL_H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  function paintCanvasBg() {
+    ctx.fillStyle = BOARD_COLOR;
+    ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+  }
+  paintCanvasBg();
+
+  function paintAction(action, context = ctx) {
+    if (action.type === "fill") {
+      floodFillAt(action.x, action.y, action.color);
+      return;
+    }
+    const { x1, y1, x2, y2, color, size, type } = action;
+    const w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+    context.strokeStyle = color;
+    context.lineWidth = size;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    if (type === "rectangle" && w && h) {
+      context.rect(Math.min(x1, x2), Math.min(y1, y2), w, h);
+    } else if (type === "ellipse" && w && h) {
+      context.ellipse((x1 + x2) / 2, (y1 + y2) / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    } else {
+      context.moveTo(x1, y1);
+      context.lineTo(x1 === x2 && y1 === y2 ? x2 + 0.1 : x2, y2);
+    }
+    context.stroke();
+  }
+
+  /* ── Flood fill — "bucket" tool, like Paint's fill: tapping an enclosed
+     area fills every connected pixel of the same color. Runs on raw pixel
+     data rather than the line-segment model everything else here uses, so
+     it's synced to other players as its own action type, not a stroke. ── */
+  function hexToRgb(hex) {
+    const m = String(hex).replace("#", "").match(/.{1,2}/g) || ["f5","f5","f7"];
+    return [parseInt(m[0], 16), parseInt(m[1], 16), parseInt(m[2], 16)];
+  }
+  function floodFillAt(logicalX, logicalY, fillColorHex) {
+    const w = canvas.width, h = canvas.height;
+    const startX = Math.min(w - 1, Math.floor(logicalX * dpr));
+    const startY = Math.min(h - 1, Math.floor(logicalY * dpr));
+
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const data = imgData.data;
+    const fillRgb = hexToRgb(fillColorHex);
+
+    const startIdx = (startY * w + startX) * 4;
+    const targetR = data[startIdx], targetG = data[startIdx + 1], targetB = data[startIdx + 2], targetA = data[startIdx + 3];
+
+    // Already this exact color under the tap — nothing to do
+    if (Math.abs(targetR - fillRgb[0]) < 8 && Math.abs(targetG - fillRgb[1]) < 8 && Math.abs(targetB - fillRgb[2]) < 8 && targetA > 200) return;
+
+    const TOLERANCE = 45; // generous enough to swallow anti-aliased stroke edges
+    function matches(i) {
+      return Math.abs(data[i] - targetR) <= TOLERANCE &&
+             Math.abs(data[i + 1] - targetG) <= TOLERANCE &&
+             Math.abs(data[i + 2] - targetB) <= TOLERANCE &&
+             Math.abs(data[i + 3] - targetA) <= TOLERANCE;
+    }
+
+    const visited = new Uint8Array(w * h);
+    const stack = new Uint32Array(w * h);
+    let length = 0;
+    function visit(pixel) {
+      if (visited[pixel]) return;
+      visited[pixel] = 1;
+      const i = pixel * 4;
+      if (!matches(i)) return;
+      data[i] = fillRgb[0]; data[i + 1] = fillRgb[1]; data[i + 2] = fillRgb[2]; data[i + 3] = 255;
+      stack[length++] = pixel;
+    }
+    visit(startY * w + startX);
+    while (length) {
+      const pixel = stack[--length];
+      const x = pixel % w;
+      if (x) visit(pixel - 1);
+      if (x + 1 < w) visit(pixel + 1);
+      if (pixel >= w) visit(pixel - w);
+      if (pixel + w < w * h) visit(pixel + w);
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  function clearCanvasLocal() { paintCanvasBg(); }
+  function replayStrokes(strokes) {
+    clearCanvasLocal();
+    (strokes || []).forEach(action => paintAction(action));
+  }
+
+  function getCanvasPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = LOGICAL_W / rect.width;
+    const scaleY = LOGICAL_H / rect.height;
+    return {
+      x: Math.max(0, Math.min(LOGICAL_W, (e.clientX - rect.left) * scaleX)),
+      y: Math.max(0, Math.min(LOGICAL_H, (e.clientY - rect.top) * scaleY)),
+    };
+  }
+
+  /* ── Local action log (drawer side only) — lets Undo remove just the
+     last stroke or fill instead of wiping the whole canvas. Grouped by
+     strokeId so one continuous pen drag (made of many tiny line segments)
+     undoes as a single unit, not one segment at a time. Reset whenever
+     the canvas itself is cleared or a new round starts. ── */
+  let myActions = [];
+  let currentStrokeId = 0;
+  let fillSelected = false;
+  let drag = null;
+  // Network send buffer for drawing segments — see emitStroke()/flushStrokes()
+  let strokeBuffer = [];
+  let strokeFlushTimer = null;
+
+  function commitAction(action) {
+    if (myActions.length >= 24000) return;
+    paintAction(action);
+    myActions.push(action);
+    emitStroke(action);
+  }
+
+  function dragAction(e, end) {
+    const { tool, start, color, size, strokeId } = drag;
+    const shape = !["brush", "eraser"].includes(tool);
+    return {
+      type: shape ? tool : undefined, color, strokeId,
+      size: !shape && e.pointerType === "pen" && e.pressure
+        ? Math.max(1, size * e.pressure) : size,
+      x1: start.x, y1: start.y, x2: end.x, y2: end.y,
+    };
+  }
+
+  function cancelDrag() {
+    drag = null;
+    preview.hidden = true;
+  }
+
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!isDrawer || !socket?.connected || drag || (e.button !== 0 && e.button !== 2)) return;
+    const start = getCanvasPos(e);
+    const tool = fillSelected ? "fill" : $("drawTool").value;
+    const color = tool === "eraser" ? BOARD_COLOR : e.button === 2 ? $("drawColor").value : currentColor;
+    const strokeId = ++currentStrokeId;
+    if (tool === "fill") {
+      commitAction({ type: "fill", ...start, color, strokeId });
+    } else {
+      drag = { pointerId: e.pointerId, tool, start, color, size: currentSize, strokeId };
+      canvas.setPointerCapture(e.pointerId);
+      if (tool === "brush" || tool === "eraser") {
+        commitAction(dragAction(e, start));
+      } else {
+        preview.style.left = canvas.offsetLeft + "px";
+        preview.style.top = canvas.offsetTop + "px";
+        preview.style.width = canvas.clientWidth + "px";
+        preview.style.height = canvas.clientHeight + "px";
+        previewCtx.clearRect(0, 0, LOGICAL_W, LOGICAL_H);
+        preview.hidden = false;
+      }
+    }
+    updateUndoBtnState();
+  });
+  canvas.addEventListener("contextmenu", (e) => { if (isDrawer) e.preventDefault(); });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!isDrawer || drag?.pointerId !== e.pointerId) return;
+    const end = getCanvasPos(e);
+    const action = dragAction(e, end);
+    if (action.type) {
+      previewCtx.clearRect(0, 0, LOGICAL_W, LOGICAL_H);
+      paintAction(action, previewCtx);
+    } else {
+      commitAction(action);
+      drag.start = end;
+    }
+  });
+  canvas.addEventListener("pointerup", (e) => {
+    if (drag?.pointerId !== e.pointerId) return;
+    const action = dragAction(e, getCanvasPos(e));
+    if (action.type || action.x1 !== action.x2 || action.y1 !== action.y2) commitAction(action);
+    cancelDrag();
+    flushStrokes();
+    updateUndoBtnState();
+  });
+  for (const event of ["pointercancel", "lostpointercapture"]) {
+    canvas.addEventListener(event, (e) => {
+      if (drag?.pointerId !== e.pointerId) return;
+      cancelDrag();
+      flushStrokes();
+    });
+  }
+
+  function emitStroke(stroke) {
+    if (!socket || !currentRoomId) return;
+    // The local canvas is already drawn synchronously by the caller, so the
+    // drawer sees no delay. Only the NETWORK send is batched: pointermove
+    // fires 60-120x/second, and sending each one as its own socket message
+    // (then fanning it out to every other player) was the heaviest traffic
+    // in the app. Buffering into ~40ms batches cuts that by several times
+    // with no visible difference to viewers.
+    strokeBuffer.push(stroke);
+    if (strokeBuffer.length >= 64) { flushStrokes(); return; } // don't let a fast drag grow it unbounded
+    if (strokeFlushTimer === null) {
+      strokeFlushTimer = setTimeout(flushStrokes, 40);
+    }
+  }
+
+  function flushStrokes() {
+    if (strokeFlushTimer !== null) { clearTimeout(strokeFlushTimer); strokeFlushTimer = null; }
+    if (!strokeBuffer.length) return;
+    const batch = strokeBuffer;
+    strokeBuffer = [];
+    if (!socket?.connected || !currentRoomId) return;
+    socket.emit("drawGuess:stroke", { roomId: currentRoomId, strokes: batch });
+  }
+
+  function discardStrokeBuffer() {
+    if (strokeFlushTimer !== null) { clearTimeout(strokeFlushTimer); strokeFlushTimer = null; }
+    strokeBuffer = [];
+  }
+
+  function updateUndoBtnState() {
+    const btn = $("undoBtn");
+    if (btn) btn.disabled = myActions.length === 0;
+  }
+
+  function undoLastAction() {
+    if (!isDrawer || !socket?.connected || !myActions.length) return;
+    cancelDrag();
+    const lastId = myActions[myActions.length - 1].strokeId;
+    myActions = myActions.filter(a => a.strokeId !== lastId);
+    replayStrokes(myActions);
+    updateUndoBtnState();
+    // Send any buffered segments FIRST. Otherwise they'd arrive after the
+    // undo and re-add the strokes we just removed.
+    flushStrokes();
+    socket.emit("drawGuess:undo", { roomId: currentRoomId });
+  }
+
+  /* ── Color/tool UI ───────────────────────────────────────────── */
+  const colorsWrap = $("dgColors");
+  COLORS.forEach((c, i) => {
+    const sw = document.createElement("button");
+    sw.type = "button";
+    sw.setAttribute("aria-label", "ფერი " + c);
+    sw.className = "dg-color-swatch" + (i === 0 ? " active" : "");
+    sw.style.background = c;
+    sw.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      $("drawColor").value = c;
+    });
+    sw.addEventListener("click", () => {
+      currentColor = c;
+      colorsWrap.querySelectorAll(".dg-color-swatch").forEach(el => el.classList.remove("active"));
+      sw.classList.add("active");
+    });
+    colorsWrap.appendChild(sw);
+  });
+  $("brushSize").addEventListener("input", (e) => { currentSize = parseInt(e.target.value, 10) || 5; });
+  $("clearCanvasBtn").addEventListener("click", () => {
+    if (!isDrawer || !socket?.connected) return;
+    cancelDrag();
+    clearCanvasLocal();
+    myActions = [];
+    updateUndoBtnState();
+    // Drop anything still buffered — if it were sent after the clear it would
+    // reappear on an otherwise blank canvas for everyone else.
+    discardStrokeBuffer();
+    socket.emit("drawGuess:clear", { roomId: currentRoomId });
+  });
+  $("undoBtn").addEventListener("click", undoLastAction);
+  function setFillSelected(active) {
+    fillSelected = active;
+    $("fillToolBtn").setAttribute("aria-pressed", String(active));
+  }
+  $("fillToolBtn").addEventListener("click", () => setFillSelected(!fillSelected));
+  $("drawTool").addEventListener("change", () => setFillSelected(false));
+  $("drawColor").addEventListener("input", (e) => {
+    currentColor = e.target.value;
+    colorsWrap.querySelectorAll(".dg-color-swatch").forEach(el => el.classList.remove("active"));
+  });
+  const toolKeys = { b: "brush", e: "eraser", l: "line", r: "rectangle", o: "ellipse", f: "fill" };
+  document.addEventListener("keydown", (e) => {
+    if (!isDrawer || e.target.matches?.("input, textarea, select, [contenteditable]")) return;
+    const key = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && key === "z") {
+      e.preventDefault();
+      undoLastAction();
+    } else if (!e.ctrlKey && !e.metaKey && !e.altKey && Object.hasOwn(toolKeys, key)) {
+      const tool = toolKeys[key];
+      setFillSelected(tool === "fill");
+      if (tool !== "fill") $("drawTool").value = tool;
+    }
+  });
+
+  /* ── Setup screen: friend picker ─────────────────────────────── */
+  function renderOnlineFriends() {
+    const list = $("onlineFriendsList");
+    if (!onlineFriends.length) {
+      list.innerHTML = `<div class="dg-empty-state">ახლა არავინ არის ონლაინ.<br><small>დაელოდე ვინმეს შემოსვლას.</small></div>`;
+      $("createRoomBtn").textContent = "ლობი შექმენი";
+      return;
+    }
+    list.innerHTML = onlineFriends.map(f => {
+      const avatarHtml = f.avatar
+        ? `<img src="/${esc(f.avatar)}" alt="avatar" />`
+        : esc(f.username).charAt(0).toUpperCase();
+      return `
+      <div class="dg-friend-pick-row${selectedFriends.has(f.username.toLowerCase()) ? " selected" : ""}" data-u="${esc(f.username)}">
+        <div class="dg-pick-avatar">${avatarHtml}</div>
+        <div class="dg-pick-name">${esc(f.username)}</div>
+        ${myFriendsLc.has(f.username.toLowerCase()) ? '<span class="dg-lobby-tag">მეგობარი</span>' : ""}
+        <div class="dg-pick-check">✓</div>
+      </div>`;
+    }).join("");
+    list.querySelectorAll(".dg-friend-pick-row").forEach(row => {
+      row.addEventListener("click", () => {
+        const lc = row.dataset.u.toLowerCase();
+        if (selectedFriends.has(lc)) selectedFriends.delete(lc); else selectedFriends.add(lc);
+        row.classList.toggle("selected");
+        $("createRoomBtn").textContent = selectedFriends.size ? "მოწვევის გაგზავნა" : "ლობი შექმენი";
+      });
+    });
+  }
+
+  $("createRoomBtn").addEventListener("click", () => {
+    const usernames = onlineFriends.filter(f => selectedFriends.has(f.username.toLowerCase())).map(f => f.username);
+    socket.emit("drawGuess:invite", { toUsernames: usernames });
+  });
+
+  /* ── Active-games browser: join a room someone else already started ── */
+  function renderPublicRooms(rooms) {
+    const list = $("publicRoomList");
+    if (!rooms || !rooms.length) {
+      list.innerHTML = `<div class="dg-empty-state">ახლა არცერთი თამაში არ მიმდინარეობს.</div>`;
+      return;
+    }
+    list.innerHTML = rooms.map(r => `
+      <div class="dg-public-room-row" data-room="${esc(r.roomId)}">
+        <div class="dg-public-room-info">
+          <div class="dg-public-room-host">🎨 ${esc(r.hostUsername)}-ის ოთახი</div>
+          <div class="dg-public-room-meta">${r.playerCount}/${r.maxPlayers} მოთამაშე${r.status === "playing" ? ` · რაუნდი ${r.roundNumber}` : ""}</div>
+        </div>
+        <span class="dg-room-status-badge ${r.status}">${r.status === "playing" ? "მიმდინარეობს" : "ლობი"}</span>
+        <button class="dg-join-room-btn">შემოერთება</button>
+      </div>`).join("");
+    list.querySelectorAll(".dg-public-room-row").forEach(row => {
+      row.querySelector(".dg-join-room-btn").addEventListener("click", () => {
+        socket.emit("drawGuess:join", { roomId: row.dataset.room });
+      });
+    });
+  }
+
+  /* ── Lobby rendering ─────────────────────────────────────────── */
+  function renderLobby(state) {
+    lastRoomPlayers = state.players || [];
+    isHost = state.hostUsername.toLowerCase() === myUsernameLower;
+    $("drawSettings").hidden = !isHost;
+
+    $("lobbyPlayers").innerHTML = lastRoomPlayers.map(p => {
+      const avatarHtml = p.avatar
+        ? `<img src="/${esc(p.avatar)}" alt="avatar" />`
+        : esc(p.username).charAt(0).toUpperCase();
+      return `
+      <div class="dg-lobby-player${p.username.toLowerCase() === state.hostUsername.toLowerCase() ? " host" : ""}">
+        <div class="dg-pick-avatar">${avatarHtml}</div>
+        <div class="dg-pick-name">${esc(p.username)}</div>
+        ${p.username.toLowerCase() === state.hostUsername.toLowerCase() ? '<span class="dg-lobby-tag">მასპინძელი</span>' : ""}
+      </div>`;
+    }).join("");
+
+    // Host can remove anyone else from the lobby before the game starts.
+    if (isHost) {
+      $("lobbyPlayers").querySelectorAll(".dg-lobby-player").forEach((row, i) => {
+        const p = lastRoomPlayers[i];
+        if (!p || p.username.toLowerCase() === myUsernameLower) return;
+        row.appendChild(GaicaniLobbyKick.button(p.username, () => socket.emit("drawGuess:kick", { roomId: currentRoomId, username: p.username })));
+      });
+    }
+
+    $("startGameBtn").style.display = isHost ? "block" : "none";
+    $("startGameBtn").disabled = lastRoomPlayers.length < 2;
+    $("lobbyWaitHint").textContent = isHost
+      ? (lastRoomPlayers.length < 2 ? "დაელოდე მინიმუმ 1 მეგობრის შემოერთებას." : "")
+      : "მასპინძლის მოლოდინში...";
+
+    const inviteWrap = $("lobbyInviteMoreWrap");
+    if (isHost) {
+      inviteWrap.innerHTML = `<button class="dg-invite-more-btn" id="inviteMoreBtn">+ მეტი მეგობრის მოწვევა</button>`;
+      $("inviteMoreBtn").onclick = () => {
+        const inRoom = new Set(lastRoomPlayers.map(p => p.username.toLowerCase()));
+        const available = onlineFriends.filter(f => !inRoom.has(f.username.toLowerCase()));
+        if (!available.length) { showToast("ყველა ონლაინ მეგობარი უკვე ოთახშია."); return; }
+        socket.emit("drawGuess:invite", { toUsernames: available.map(f => f.username) });
+        showToast("მოწვევა გაიგზავნა.");
+      };
+    } else {
+      inviteWrap.innerHTML = "";
+    }
+  }
+
+  /* ── Play screen rendering ───────────────────────────────────── */
+  function renderScoreboard(players) {
+    $("scoreboard").innerHTML = (players || []).map(p => {
+      const classes = ["dg-score-chip"];
+      if (p.isDrawer) classes.push("drawing");
+      if (!p.connected) classes.push("disconnected");
+      return `<div class="${classes.join(" ")}">
+        <span class="dg-score-avatar">${esc(p.username).charAt(0).toUpperCase()}</span>
+        <span>${esc(p.username)}${p.isDrawer ? " ✏️" : ""}</span>
+        <span class="dg-score-val">${p.score}</span>
+      </div>`;
+    }).join("");
+  }
+
+  function appendChat({ username, text, correct, points }) {
+    const chat = $("dgChat");
+    const line = document.createElement("div");
+    if (correct) {
+      line.className = "dg-chat-line correct";
+      line.textContent = `🎉 ${username} გამოიცნო! (+${points})`;
+    } else if (username) {
+      line.className = "dg-chat-line";
+      line.innerHTML = `<span class="u">${esc(username)}:</span> ${esc(text)}`;
+    } else {
+      line.className = "dg-chat-line system";
+      line.textContent = text;
+    }
+    chat.appendChild(line);
+    chat.scrollTop = chat.scrollHeight;
+  }
+  function clearChat() { $("dgChat").innerHTML = ""; }
+
+  function startTimer(endsAt) {
+    clearInterval(timerInterval);
+    function tick() {
+      const secs = Math.max(0, Math.ceil((endsAt - Date.now()) / 1000));
+      for (const el of [$("dgTimer"), $("dgKbTimer")]) { // the 2nd shows in the guess bar while typing
+        el.textContent = secs;
+        el.classList.toggle("low", secs <= 15);
+      }
+      if (secs <= 0) clearInterval(timerInterval);
+    }
+    tick();
+    timerInterval = setInterval(tick, 250);
+  }
+
+  function beginRound({ roundNumber, totalRounds, drawerUsername, isDrawer: iAmDrawer, word, wordLength, hint, endsAt, alreadyGuessed }) {
+    isDrawer = iAmDrawer;
+    hasGuessedThisRound = !!alreadyGuessed;
+    $("roundNum").textContent = roundNumber;
+    $("roundTotal").textContent = totalRounds;
+    $("drawerName").textContent = drawerUsername;
+    $("wordChoiceOverlay").style.display = "none";
+    $("roundEndOverlay").style.display = "none";
+    clearCanvasLocal();
+    myActions = [];
+    discardStrokeBuffer(); // don't let last round's tail segments leak into this one
+    cancelDrag();
+    $("drawTool").value = "brush";
+    setFillSelected(false);
+    updateUndoBtnState();
+    clearChat();
+    startTimer(endsAt);
+
+    $("wordHint").textContent = iAmDrawer || alreadyGuessed ? word : hint || Array(wordLength || 0).fill("_").join(" ");
+    $("wordHint").classList.toggle("is-word", iAmDrawer || hasGuessedThisRound);
+
+    $("drawTools").style.display = iAmDrawer ? "flex" : "none";
+    $("guessBar").style.display = iAmDrawer || alreadyGuessed ? "none" : "flex";
+    $("dgGuessHint").style.display = iAmDrawer || alreadyGuessed ? "none" : "block";
+    $("guessInput").disabled = hasGuessedThisRound;
+    $("guessSend").disabled = hasGuessedThisRound;
+    $("guessInput").value = "";
+    growGuessInput();
+  }
+
+  /* ── Guess input ─────────────────────────────────────────────── */
+  function sendGuess() {
+    const input = $("guessInput");
+    const text = input.value.replace(/\s+/g, " ").trim();
+    if (!text || hasGuessedThisRound || !socket?.connected) return;
+    socket.emit("drawGuess:guess", { roomId: currentRoomId, text });
+    input.value = "";
+    growGuessInput();
+  }
+  // Grows to two lines for a long guess, like random chat's box.
+  function growGuessInput() {
+    const input = $("guessInput");
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight + 2, 84) + "px";
+  }
+  $("guessInput").addEventListener("input", (e) => {
+    const input = $("guessInput");
+    if (!e.isComposing && /\n/.test(input.value)) { input.value = input.value.replace(/\n/g, ""); sendGuess(); return; } // Enter from keyboards that skip keydown
+    growGuessInput();
+  });
+  $("guessSend").addEventListener("click", sendGuess);
+  // Tapping გაგზავნა must not take the focus away from the box — otherwise
+  // the phone keyboard closes after every guess and the screen jumps.
+  $("guessSend").addEventListener("pointerdown", (e) => { if (document.activeElement === $("guessInput")) e.preventDefault(); });
+  $("guessInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.isComposing && e.keyCode !== 229) { e.preventDefault(); sendGuess(); }
+  });
+
+  /* ── End screen ──────────────────────────────────────────────── */
+  function renderEnd(scores) {
+    $("finalLeaderboard").innerHTML = scores.map((s, i) => `
+      <div class="dg-lb-row">
+        <div class="dg-lb-rank">${i + 1}</div>
+        <div class="dg-lb-name">${esc(s.username)}${i === 0 ? " 🏆" : ""}</div>
+        <div class="dg-lb-score">${s.score}</div>
+      </div>`).join("");
+  }
+
+  /* ── Cross-room invite bar (while already on this page) ───────── */
+  function showInviteBar(roomId, fromUsername) {
+    const bar = $("dgInviteBar");
+    bar.style.display = "flex";
+    bar.innerHTML = `
+      <span>🎨 <strong>${esc(fromUsername)}</strong> გპატიჟებს თამაშში</span>
+      <button class="dg-invite-accept">✅</button>
+      <button class="dg-invite-decline">❌</button>`;
+    bar.querySelector(".dg-invite-accept").onclick = () => {
+      bar.style.display = "none";
+      window.location.href = "/draw-guess.html?room=" + encodeURIComponent(roomId);
+    };
+    bar.querySelector(".dg-invite-decline").onclick = () => {
+      bar.style.display = "none";
+      socket.emit("drawGuess:declineInvite", { roomId });
+    };
+  }
+
+  /* ── Boot ────────────────────────────────────────────────────── */
+  function init() {
+    socket = io(); attachTempBanGuard(socket);
+    window.GaicaniRematch?.mount({ socket, game: "drawGuess", before: document.querySelector("#endScreen .dg-btn-primary"), roomId: () => currentRoomId, me: () => myUsernameLower });
+    socket.on("connect", () => {
+      if (token) socket.emit("auth:token", { token });
+      else socket.emit("auth:guest", { preferredUsername: sessionStorage.getItem("gaicani_guest_username") || null });
+    });
+
+    socket.on("auth:authenticated", ({ username: authedName, friends, isGuest } = {}) => {
+      if (isGuest && authedName) {
+        myUsernameLower = authedName.toLowerCase();
+        try { sessionStorage.setItem("gaicani_guest_username", authedName); } catch (_) {}
+      }
+      myFriendsLc = new Set((friends || []).map(f => f.toLowerCase()));
+      elLoading.classList.add("hidden");
+      socket.emit("users:listOnline");
+      socket.emit("drawGuess:listPublicRooms");
+
+      if (currentRoomId) {
+        showScreen("lobby");
+        socket.emit("drawGuess:join", { roomId: currentRoomId });
+      } else {
+        showScreen("setup");
+      }
+    });
+
+    socket.on("auth:invalid", () => { window.location.href = "/"; });
+
+    socket.on("users:onlineList", ({ users }) => {
+      onlineFriends = (users || []).filter(u => u.username.toLowerCase() !== myUsernameLower);
+      renderOnlineFriends();
+    });
+    socket.on("users:onlineChanged", () => socket.emit("users:listOnline"));
+
+    socket.on("drawGuess:publicRooms", (rooms) => renderPublicRooms(rooms));
+
+    socket.on("drawGuess:playerJoined", ({ username: who }) => {
+      showToast(`${who} შემოუერთდა თამაშს — მალე მასაც დაუწყდება ხატვის რიგი.`);
+    });
+
+    socket.on("drawGuess:invited", ({ roomId, fromUsername }) => {
+      showInviteBar(roomId, fromUsername);
+    });
+
+    socket.on("drawGuess:inviteSent", ({ invited, cooldown }) => {
+      if (invited && invited.length) showToast(`მოწვევა გაეგზავნა: ${invited.join(", ")}`);
+      if (cooldown && cooldown.length) showToast(`${cooldown.join(", ")} ცოტა ხნის წინ უარი განაცხადა — სცადე მოგვიანებით.`);
+      if ((!invited || !invited.length) && (!cooldown || !cooldown.length)) showToast("ვერავინ მოწვეულ იქნა — შეამოწმე ონლაინ არიან თუ არა.");
+    });
+
+    socket.on("drawGuess:inviteDeclined", ({ username: who }) => {
+      showToast(`${who}-მ უარყო მოწვევა.`);
+    });
+
+    socket.on("drawGuess:room", (state) => {
+      currentRoomId = state.roomId;
+      history.replaceState(null, "", "/draw-guess.html?room=" + encodeURIComponent(state.roomId));
+      if (state.status === "lobby") {
+        showScreen("lobby");
+        renderLobby(state);
+      } else if (state.status === "playing") {
+        showScreen("play");
+        renderScoreboard(state.players);
+        if (!state.wordLength) {
+          // Between rounds (word not yet picked) — make sure no stale overlay lingers.
+          $("roundEndOverlay").style.display = "none";
+        }
+      }
+    });
+
+    socket.on("drawGuess:kicked", () => {
+      showToast("🚫 მასპინძელმა ლობიდან გაგაგდო");
+      currentRoomId = null;
+      lastRoomPlayers = [];
+      history.replaceState(null, "", "/draw-guess.html");
+      showScreen("setup");
+      socket.emit("drawGuess:listPublicRooms");
+    });
+    socket.on("drawGuess:kickDone", ({ username }) => showToast(`${username} ლობიდან გააგდე`));
+
+    socket.on("drawGuess:error", ({ message }) => {
+      showToast(message);
+      if (!lastRoomPlayers.length) { showScreen("setup"); }
+    });
+
+    $("startGameBtn").addEventListener("click", () => {
+      for (const input of $("drawSettings").querySelectorAll('input[type="number"]')) {
+        if (!input.validity.valid) {
+          $("drawSettings").open = true;
+          input.reportValidity();
+          return;
+        }
+      }
+      const settings = {
+        seconds: $("drawSeconds").valueAsNumber, cycles: $("drawCycles").valueAsNumber,
+        choices: $("drawChoices").valueAsNumber, hints: $("drawHints").valueAsNumber,
+        mode: $("drawMode").value, customWords: $("drawCustomWords").value,
+        customOnly: $("drawCustomOnly").checked,
+      };
+      socket.emit("drawGuess:start", { roomId: currentRoomId, settings });
+    });
+    $("copyDrawInvite").addEventListener("click", async () => {
+      if (!currentRoomId) return;
+      const url = new URL("/draw-guess.html", location.href);
+      url.searchParams.set("room", currentRoomId);
+      try {
+        await navigator.clipboard.writeText(url.href);
+        showToast("მოსაწვევი ბმული დაკოპირდა.");
+      } catch {
+        window.prompt("დააკოპირე მოსაწვევი ბმული", url.href);
+      }
+    });
+
+    socket.on("drawGuess:chooseWord", ({ choices }) => {
+      showScreen("play");
+      isDrawer = false;
+      cancelDrag();
+      $("drawTools").style.display = "none";
+      // You're the drawer now: no guess box, and close the keyboard if it
+      // was still open from guessing last round.
+      $("guessBar").style.display = "none";
+      $("dgGuessHint").style.display = "none";
+      $("guessInput").blur();
+      $("roundEndOverlay").style.display = "none";
+      $("wordChoiceOverlay").style.display = "flex";
+      $("wordChoiceButtons").innerHTML = choices.map(w => `<button class="dg-word-choice-btn" data-w="${esc(w)}">${esc(w)}</button>`).join("");
+      $("wordChoiceButtons").querySelectorAll(".dg-word-choice-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          socket.emit("drawGuess:pickWord", { roomId: currentRoomId, word: btn.dataset.w });
+          $("wordChoiceOverlay").style.display = "none";
+        }, { once: true });
+      });
+    });
+
+    socket.on("drawGuess:roundStart", (payload) => {
+      showScreen("play");
+      beginRound(payload);
+    });
+
+    socket.on("drawGuess:roundSync", (payload) => {
+      if (!payload) return;
+      showScreen("play");
+      beginRound(payload);
+      replayStrokes(payload.strokes);
+      if (payload.isDrawer) {
+        myActions = payload.strokes || [];
+        currentStrokeId = myActions.reduce((last, action) => Math.max(last, action.strokeId), 0);
+        updateUndoBtnState();
+      }
+    });
+    socket.on("drawGuess:hint", ({ hint }) => {
+      if (!isDrawer && !hasGuessedThisRound) $("wordHint").textContent = hint;
+    });
+
+    socket.on("drawGuess:stroke", ({ stroke, strokes }) => {
+      // Strokes now arrive in small batches (see emitStroke on the drawer
+      // side). A lone `stroke` is still handled so nothing depends on shape.
+      const list = Array.isArray(strokes) ? strokes : (stroke ? [stroke] : []);
+      for (const action of list) if (action) paintAction(action);
+    });
+    socket.on("drawGuess:clear", () => clearCanvasLocal());
+    socket.on("drawGuess:undo", ({ strokes }) => replayStrokes(strokes));
+
+    socket.on("drawGuess:chat", (payload) => appendChat(payload));
+    socket.on("drawGuess:closeGuess", () => showToast("ახლოს ხარ!"));
+
+    socket.on("drawGuess:youGuessed", ({ points, word }) => {
+      hasGuessedThisRound = true;
+      $("guessInput").disabled = true;
+      $("guessSend").disabled = true;
+      $("wordHint").textContent = word;
+      $("wordHint").classList.add("is-word");
+      showToast(`სწორია! +${points} ქულა 🎉`);
+    });
+
+    socket.on("drawGuess:scores", ({ scores }) => {
+      lastRoomPlayers = lastRoomPlayers.map(p => {
+        const s = scores.find(x => x.username === p.username);
+        return s ? { ...p, score: s.score } : p;
+      });
+      renderScoreboard(lastRoomPlayers);
+    });
+
+    socket.on("drawGuess:roundEnd", ({ word, drawerUsername, drawerPoints, correctCount, scores, reason }) => {
+      clearInterval(timerInterval);
+      isDrawer = false;
+      cancelDrag();
+      discardStrokeBuffer();
+      $("guessBar").style.display = "none";
+      $("dgGuessHint").style.display = "none";
+      $("drawTools").style.display = "none";
+      const overlay = $("roundEndOverlay");
+      overlay.style.display = "flex";
+      if (word) {
+        $("roundEndWord").textContent = `სიტყვა იყო: ${word}`;
+        $("roundEndDetail").textContent = `${correctCount} მოთამაშემ გამოიცნო · ${drawerUsername}-მა მიიღო +${drawerPoints}`;
+      } else {
+        $("roundEndWord").textContent = "რაუნდი გამოტოვებულია";
+        $("roundEndDetail").textContent = `${drawerUsername} გათიშული იყო.`;
+      }
+      lastRoomPlayers = lastRoomPlayers.map(p => {
+        const s = scores.find(x => x.username === p.username);
+        return s ? { ...p, score: s.score, isDrawer: false } : p;
+      });
+      renderScoreboard(lastRoomPlayers);
+    });
+
+    socket.on("drawGuess:gameEnd", ({ scores }) => {
+      clearInterval(timerInterval);
+      isDrawer = false;
+      cancelDrag();
+      discardStrokeBuffer();
+      showScreen("end");
+      renderEnd(scores);
+    });
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
