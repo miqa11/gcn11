@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ka">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script src="/safari-fix.js"></script>
+  <meta name="theme-color" content="#161324">
+  <title>ერთ მოწყობილობაზე თამაში · გაიცანი</title>
+  <link rel="stylesheet" href="/local-party.css">
+  <script defer src="/local-party-words.js"></script>
+  <script defer src="/local-party-art.js"></script>
+  <script defer src="/local-party.js"></script>
+</head>
+<body>
+  <main class="party">
+    <header class="party-nav">
+      <a class="button secondary" href="/dashboard.html#games">← თამაშები</a>
+      <button class="button secondary" id="settings" type="button" hidden>პარამეტრები</button>
+    </header>
+    <article class="party-table">
+      <header class="party-title">
+        <span id="game-icon" class="seal" aria-hidden="true"></span>
+        <div>
+          <p class="eyebrow">ერთ მოწყობილობაზე</p>
+          <h1 id="game-name">იმპოსტორი</h1>
+        </div>
+      </header>
+
+      <section id="setup">
+        <p id="description"></p>
+        <form id="setup-form">
+          <div class="settings-grid">
+            <label id="player-setting">მოთამაშეების რაოდენობა
+              <select id="player-count"></select>
+            </label>
+            <label id="mode-setting" hidden>თამაშის რეჟიმი
+              <select id="alias-mode">
+                <option value="pair">ორი მოთამაშე</option>
+                <option value="teams">გუნდები</option>
+              </select>
+            </label>
+            <label id="team-setting" hidden>გუნდების რაოდენობა
+              <select id="team-count"><option>2</option><option>3</option><option>4</option></select>
+            </label>
+            <label id="duration-setting" hidden>რაუნდის დრო
+              <select id="duration">
+                <option value="30">30 წამი</option>
+                <option value="60" selected>60 წამი</option>
+                <option value="90">90 წამი</option>
+              </select>
+            </label>
+            <label id="target-setting" hidden>სამიზნე ქულა
+              <select id="target"><option>10</option><option selected>20</option><option>30</option></select>
+            </label>
+          </div>
+          <fieldset class="names-panel">
+            <legend id="names-label">მოთამაშეების სახელები · სურვილისამებრ</legend>
+            <div class="settings-grid names" id="names"></div>
+          </fieldset>
+          <p id="setup-error" class="error" role="alert" hidden></p>
+          <button class="button primary full" type="submit">თამაშის დაწყება</button>
+        </form>
+      </section>
+
+      <section class="play" id="handoff" hidden>
+        <p class="eyebrow" id="handoff-progress"></p>
+        <h2 id="handoff-title" class="turn-name" tabindex="-1"></h2>
+        <p id="handoff-note"></p>
+        <button class="button primary" id="open-private" type="button"></button>
+      </section>
+
+      <section class="play" id="private-card" hidden>
+        <p class="eyebrow">საიდუმლო ბარათი</p>
+        <h2 id="card-player" class="turn-name" tabindex="-1"></h2>
+        <div class="word-card">
+          <div id="private-art" class="card-art" aria-hidden="true" hidden></div>
+          <div class="word-copy">
+            <strong id="private-word"></strong>
+            <p id="private-note"></p>
+          </div>
+        </div>
+        <button class="button primary" id="pass-card" type="button">დამალე და გადააწოდე</button>
+      </section>
+
+      <section class="play" id="discussion" hidden>
+        <p class="eyebrow">მინიშნებები</p>
+        <h2 tabindex="-1">თქვით მინიშნებები ხმამაღლა</h2>
+        <p id="first-speaker"></p>
+        <p>რიგრიგობით თქვით თითო მინიშნება და შემდეგ იმსჯელეთ, ვის შეიძლება ჰქონდეს სხვა ბარათი. საიდუმლო სიტყვა არ გაამხილოთ.</p>
+        <button class="button primary" id="start-vote" type="button">ხმის მიცემა</button>
+      </section>
+
+      <section class="play" id="ballot" hidden>
+        <p class="eyebrow" id="vote-label"></p>
+        <h2 id="vote-title" class="turn-name" tabindex="-1"></h2>
+        <p>აირჩიე ერთი მოთამაშე. არჩევის შემდეგ შენი ხმა დაიმალება.</p>
+        <div class="choices" id="vote-choices"></div>
+      </section>
+
+      <section class="play" id="deduction-result" hidden>
+        <p class="eyebrow">რაუნდის შედეგი</p>
+        <h2 id="result-title" tabindex="-1"></h2>
+        <p id="result-note"></p>
+        <dl class="tallies" id="revealed"></dl>
+        <button class="button primary" id="next-deduction" type="button">ახალი რაუნდი</button>
+      </section>
+
+      <section class="play" id="alias-ready" hidden>
+        <p class="eyebrow" id="alias-round"></p>
+        <h2 id="alias-turn" class="turn-name" tabindex="-1"></h2>
+        <p id="alias-hint"></p>
+        <dl class="tallies" id="alias-scores"></dl>
+        <button class="button primary" id="alias-start" type="button">დროის დაწყება</button>
+      </section>
+
+      <section class="play" id="alias-play" hidden>
+        <h2 class="alias-turn-name" id="alias-active-title" tabindex="-1"></h2>
+        <div class="alias-status">
+          <span id="alias-points"></span>
+          <span id="alias-time" role="timer"></span>
+        </div>
+        <div class="word-card alias-card">
+          <div id="alias-art" class="card-art" aria-hidden="true" hidden></div>
+          <strong id="alias-word" aria-live="polite"></strong>
+        </div>
+        <div class="alias-actions">
+          <button class="button secondary" id="alias-skip" type="button">გამოტოვება</button>
+          <button class="button primary" id="alias-correct" type="button">✓ გამოიცნეს</button>
+        </div>
+      </section>
+
+      <section class="play" id="alias-result" hidden>
+        <p class="eyebrow" id="alias-result-label"></p>
+        <h2 id="alias-result-title" tabindex="-1"></h2>
+        <p id="alias-result-note"></p>
+        <dl class="tallies" id="alias-result-scores"></dl>
+        <button class="button primary" id="alias-next" type="button"></button>
+      </section>
+
+      <details class="rules" id="rules">
+        <summary>თამაშის წესები</summary>
+        <ol id="rule-list"></ol>
+      </details>
+    </article>
+    <noscript><p>თამაშისთვის ჩართე ჯავასკრიპტი ბრაუზერის პარამეტრებში.</p></noscript>
+  </main>
+</body>
+</html>
