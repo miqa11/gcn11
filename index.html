@@ -11,10 +11,6 @@
    
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-  <script id="aclib" src="https://acscdn.com/script/aclib.js"></script>
-  <script>
-    window.aclib?.runVideoSlider?.({ zoneId: "12421550" });
-  </script>
   <script src="/safari-fix.js"></script>
   <title>GAICANI — გაცნობის საიტი და ანონიმური ჩათი საქართველოში</title>
   <meta name="description" content="GAICANI — უფასო გაცნობის საიტი და ანონიმური ჩათი საქართველოში. გაიცანით ახალი ადამიანები ონლაინ, ესაუბრეთ ტექსტში, ითამაშეთ თამაშები მეგობრებთან ერთად და იპოვეთ ახალი მეგობრები — რეგისტრაციის გარეშეც." />
@@ -442,14 +438,8 @@ body:not(.rc-theme-light):not(.rc-theme-pink):not(.rc-theme-ocean):not(.rc-theme
       <button id="myPageBtn" class="my-page-btn" style="display:none" onclick="window.location.href='/dashboard.html'">👤 ჩემი გვერდი</button>
       <button class="music-btn" id="musicBtn" disabled title="მუსიკის მოსმენა ერთად"><span class="btn-icon">🎵</span><span class="btn-label">მუსიკა</span></button>
       <button class="report-button" id="reportBtn" disabled><span class="btn-icon">🚩</span><span class="btn-label">რეპორტი</span></button>
-      <div class="chat-ad-action">
-        <button class="block-button" id="blockBtn" disabled><span class="btn-icon">🚫</span><span class="btn-label">ბლოკი</span></button>
-        <span class="chat-ad-countdown chat-ad-button-count" data-chat-ad-counter="block" aria-live="polite" title="ბლოკის ყოველ მე-5 დაჭერაზე რეკლამა ახალ ფანჯარაში გაიხსნება.">5</span>
-      </div>
-      <div class="chat-ad-action">
-        <button class="next-button" id="nextBtn"><span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span></button>
-        <span class="chat-ad-countdown chat-ad-button-count" data-chat-ad-counter="search" aria-live="polite" title="ძებნის ყოველ მე-5 დაჭერაზე რეკლამა ახალ ფანჯარაში გაიხსნება.">5</span>
-      </div>
+      <button class="block-button" id="blockBtn" disabled><span class="btn-icon">🚫</span><span class="btn-label">ბლოკი</span></button>
+      <button class="next-button" id="nextBtn"><span class="btn-icon">🔎</span><span class="btn-label">ძებნა</span></button>
     </div>
   </div>
 
@@ -715,8 +705,7 @@ body:not(.rc-theme-light):not(.rc-theme-pink):not(.rc-theme-ocean):not(.rc-theme
       <span id="priv-expiry"></span>
     </div>
     <div id="priv-messages"></div>
-    <div class="pc-input-row gc-ad-composer">
-      <span class="chat-ad-countdown" data-chat-ad-counter="private" aria-live="polite" title="ყოველ მე-10 გაგზავნაზე რეკლამა ახალ ფანჯარაში გაიხსნება.">რეკლამამდე · 10</span>
+    <div class="pc-input-row">
       <textarea id="priv-input" placeholder="შეტყობინება..."
                 rows="1" maxlength="2000"
                 autocomplete="off" autocorrect="off" spellcheck="false"></textarea>
@@ -784,8 +773,6 @@ body:not(.rc-theme-light):not(.rc-theme-pink):not(.rc-theme-ocean):not(.rc-theme
   <script src="/socket.io/socket.io.js"></script>
 <script src="/stickers.js"></script>
 <script src="/view-once.js"></script>
-<link rel="stylesheet" href="/chat-ad-countdown.css">
-<script src="/chat-ad-countdown.js"></script>
 <script src="script.js"></script>
   <script src="games.js"></script>
   <script src="music.js"></script>

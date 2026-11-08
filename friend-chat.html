@@ -3,10 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
-  <script id="aclib" src="https://acscdn.com/script/aclib.js"></script>
-  <script>
-    window.aclib?.runVideoSlider?.({ zoneId: "12421550" });
-  </script>
   <script src="/safari-fix.js"></script>
   <title>GAICANI – პირადი ჩატი</title>
   <meta name="theme-color" content="#130f26" />
@@ -1166,8 +1162,7 @@ button, textarea, input { font-family: inherit; }
   </div>
 
   <!-- INPUT BAR -->
-  <div id="fc-input-bar" class="gc-ad-composer" style="display:none">
-    <span class="chat-ad-countdown" data-chat-ad-counter="private" aria-live="polite" title="ყოველ მე-10 გაგზავნაზე რეკლამა ახალ ფანჯარაში გაიხსნება.">რეკლამამდე · 10</span>
+  <div id="fc-input-bar" style="display:none">
     <button class="fc-extra-btn" id="fc-gif-btn" title="ემოჯი, სტიკერები და GIF" aria-label="ემოჯი, სტიკერები და GIF" style="font-size:20px">😊</button>
     <button class="fc-extra-btn" id="fc-question-btn" title="შემთხვევითი კითხვა">?</button>
     <!-- Pro-only. Stays hidden (display:none) until JS confirms isPro, so
@@ -1219,8 +1214,6 @@ button, textarea, input { font-family: inherit; }
 <script src="/e2ee.js"></script>
 <script src="/view-once.js"></script>
 <script src="/socket.io/socket.io.js"></script>
-<link rel="stylesheet" href="/chat-ad-countdown.css">
-<script src="/chat-ad-countdown.js"></script>
 <script src="/friend-chat-activities.js?v=1"></script>
 <script src="/games.js?v=private-1"></script>
 <script src="/music.js?v=private-1"></script>
@@ -2187,7 +2180,6 @@ button, textarea, input { font-family: inherit; }
     const focusAfter = !opts || opts.focusAfter !== false;
     const text = elInput.value.trim();
     if (!text || !socket) return; // while reconnecting it waits and goes out after
-    window.GaicaniChatAds?.count("private");
 
     elInput.value = "";
     elInput.style.height = "auto";

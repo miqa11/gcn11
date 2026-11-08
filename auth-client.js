@@ -391,7 +391,6 @@
         authUser.isPro = !!isPro;
         authUser.adFreeUntil = Number(adFreeUntil) || 0; // 24h ad-free earned in Flappy Bird
         window.gaicaniAuthUser = authUser;
-        if (typeof window.clearAdBadgesIfPro === "function") window.clearAdBadgesIfPro();
       }
       renderDashFriends(friends || []);
     });
@@ -402,7 +401,6 @@
       if (authUser) {
         authUser.adFreeUntil = Number(adFreeUntil) || 0;
         window.gaicaniAuthUser = authUser;
-        if (typeof window.clearAdBadgesIfPro === "function") window.clearAdBadgesIfPro();
       }
     });
 
@@ -412,7 +410,6 @@
       if (authUser) {
         authUser.isPro = !!isPro;
         window.gaicaniAuthUser = authUser;
-        if (typeof window.clearAdBadgesIfPro === "function") window.clearAdBadgesIfPro();
       }
     });
 
@@ -976,7 +973,6 @@
     if (!inp) return;
     const text = inp.value.trim();
     if (!text) return;
-    window.GaicaniChatAds?.count("private");
     inp.value = "";
 
     authSocket?.emit("privateMsg:send", { toUsername: privChatPartner, message: text });
