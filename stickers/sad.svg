@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144">
+  <title>ნუუუ...</title>
+  <defs>
+    <linearGradient id="color" x2="0" y2="1">
+      <stop stop-color="#b3d8ff"/>
+      <stop offset="1" stop-color="#6a7bd3"/>
+    </linearGradient>
+  </defs>
+  <path d="M72 7c34 0 63 24 63 60s-23 67-63 67S9 107 9 70 36 7 72 7Z" fill="url(#color)" stroke="#fff7ea" stroke-width="5"/>
+  <path d="M23 45l3 7 7 3-7 3-3 7-3-7-7-3 7-3zm95 13 2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#fff7ea" opacity=".85"/>
+  <text x="72" y="79" font-family="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif" font-size="53" text-anchor="middle">🥺</text>
+  <rect x="14" y="92" width="116" height="29" rx="14" fill="#211b36"/>
+  <text x="72" y="107" dominant-baseline="central" text-anchor="middle" font-family="Sylfaen, Noto Sans Georgian, sans-serif" font-size="18" font-weight="bold" fill="#fff8ef">ნუუუ...</text>
+</svg>
