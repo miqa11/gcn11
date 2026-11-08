@@ -1,0 +1,286 @@
+/* Shared presentation for poker, joker and blackjack. No game-state selectors are replaced. */
+body.card-room {
+  --surface:#171d1e; --surface-2:#242e30; --border:#ffffff14;
+  --text:#eeeae0; --muted:#acb6b2; --gold:#e1c183;
+  --accent:#356b61; --accent-dk:#204e46; --accent-lt:#b9d9cb;
+  --table-light:#22664e; --table-mid:#174b3b; --table-dark:#0c2d25;
+  --cloth:url('/felt-grain.svg'),repeating-linear-gradient(0deg,#fff1 0 .45px,transparent .45px 3px),repeating-linear-gradient(90deg,#0001 0 .45px,transparent .45px 3px);
+  background:radial-gradient(ellipse at 50% -25%,#464031 0,transparent 65%),repeating-linear-gradient(90deg,#14191a 0 2px,#121617 2px 7px);
+}
+.card-room.card-room-joker { --table-light:#235568; --table-mid:#173f4c; --table-dark:#0c2731; }
+.card-room #app { position:relative; isolation:isolate; }
+.card-room :is(.pk-header,.bj-header,.jk-header,.jk-game-header) {
+  background:linear-gradient(180deg,#202829,#12191b); border-bottom:1px solid #c7aa6240;
+  min-height:56px; padding-bottom:6px; padding-top:calc(6px + var(--safe-top));
+  padding-left:max(16px,env(safe-area-inset-left)); padding-right:max(16px,env(safe-area-inset-right));
+}
+.card-room :is(.pk-header-title,.bj-header-title,.jk-header-title) { color:#ead8ad; letter-spacing:.025em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.card-room :is(.pk-icon-btn,.bj-icon-btn,.jk-icon-btn) { background:#ffffff06; border:1px solid #ffffff12; border-radius:12px; width:40px; height:40px; }
+.card-room :is(.pk-coin-chip,.bj-coin-chip,.jk-trump-chip) { background:#080f11a6; border:1px solid #d1b46c35; color:var(--gold); font-variant-numeric:tabular-nums; }
+.card-room :is(.pk-setup-body,.bj-setup-body,.jk-setup-body,.pk-lobby-body,.bj-lobby-body,.jk-lobby-body) { width:100%; max-width:780px; margin-inline:auto; padding:24px 22px; gap:22px; }
+.card-room :is(.pk-new-table-btn,.bj-new-game-btn,.jk-new-game-btn,.pk-start-btn,.bj-start-btn,.jk-start-btn) { background:linear-gradient(180deg,#367866,#205144); border:1px solid #8cb49b66; box-shadow:inset 0 1px #ffffff25,0 4px 12px #0004; }
+.card-room :is(.pk-friend-pick-row,.bj-pick-row,.jk-friend-pick-row,.pk-public-room-row,.bj-public-row,.jk-public-row,.pk-lobby-player,.bj-lobby-player,.jk-lobby-player) { background:linear-gradient(120deg,#252e2f,#192122); border:1px solid #c1cdbb20; border-radius:14px; padding:13px; }
+.card-room :is(.pk-lobby-actions,.bj-lobby-actions,.jk-lobby-actions,.pk-action-bar,.bj-action-panel,.jk-me-bar,.jk-my-hand-wrap) { background:linear-gradient(180deg,#1e2828,#11191b); border-color:#d3b57135; }
+.card-room :is(button,a,input):focus-visible { outline:2px solid #efd399; outline-offset:3px; }
+.card-room button { -webkit-tap-highlight-color:transparent; }
+.card-room :is(.pk-card,.bj-card,.jk-card,.jk-hand-card,.jk-trump-card-display) { border-radius:7px; box-shadow:0 1px 0 #fff9 inset,0 2px 0 #c5bba4,0 5px 9px #0006; }
+.card-room .gc-deck-card { position:relative; padding:0; background:#fffdf5; color:#1b2936; overflow:hidden; }
+.card-room .gc-deck-face { display:block; width:100%; height:100%; border-radius:inherit; pointer-events:none; }
+.card-room :is(.pk-card-back,.bj-card.back) { position:relative; background:repeating-linear-gradient(45deg,#bda35c33 0 1px,transparent 1px 5px),repeating-linear-gradient(-45deg,#bda35c33 0 1px,transparent 1px 5px),#193a4b; border:2px solid #ece5d3; }
+.card-room :is(.pk-card-back,.bj-card.back)::after { content:"◆"; position:absolute; inset:12%; display:grid; place-items:center; border:1px solid #dac58b8c; color:#dac58b; font-size:70%; border-radius:3px; }
+.card-room .pk-card.pk-card-empty { background:#061a1440; box-shadow:inset 0 1px 4px #0004; border:1px solid #e0d8bb24; }
+.card-room :is(.pk-modal-box,.pk-result-box,.jk-modal-box,.jk-overlay-box,.pk-chat-panel,.jk-chat-panel,.bj-chat-panel) { background:linear-gradient(145deg,#273333,#121b1d); border:1px solid #cbb27a55; box-shadow:0 24px 80px #0009,inset 0 1px #ffffff0d; }
+.card-room :is(.jk-modal-box,.jk-overlay-box,.pk-result-box) { max-height:calc(100dvh - 24px); overflow-y:auto; overscroll-behavior:contain; }
+.card-room :is(.pk-chat-panel,.jk-chat-panel,.bj-chat-panel) { height:min(460px,82dvh); }
+.card-room :is(.pk-chat-input-row,.jk-chat-input-row,.bj-chat-input-row) input { min-width:0; }
+.card-room :is(.pk-invite-bar,.jk-invite-bar,.bj-invite-bar) { max-width:min(440px,calc(100vw - 24px)); }
+
+/* Poker: a padded rail around woven felt, with fixed places for the hand and controls. */
+.card-room .pk-table-body { min-height:0; padding:36px 36px 10px; gap:12px; background:radial-gradient(ellipse at 50% 35%,#303531,#101718 78%); }
+.card-room .pk-table-oval {
+  margin:10px 12px 0; border:12px solid #292925; border-radius:48% / 40%;
+  background:var(--cloth),radial-gradient(ellipse at 50% 38%,var(--table-light),var(--table-mid) 55%,var(--table-dark));
+  box-shadow:0 0 0 1px #a18a566e,0 0 0 5px #111b1c,0 0 0 7px #7e663e,0 12px 28px #0009,inset 0 0 0 2px #bda96b5e,inset 0 0 35px #0008;
+}
+.card-room .pk-table-oval::before { content:""; position:absolute; inset:12px; border:1px dashed #d9c78d40; border-radius:inherit; pointer-events:none; }
+.card-room .pk-stage-label { top:34%; color:#d8d5b7b3; font-size:10px; letter-spacing:.2em; }
+.card-room .pk-center-pot { top:48%; }
+.card-room .pk-pot-amount { padding:6px 18px; color:#f1d9a4; background:linear-gradient(#1a302c,#0b201c); border-color:#d2b47888; box-shadow:0 4px 10px #0005,inset 0 1px #ffffff15; font-variant-numeric:tabular-nums; }
+.card-room .pk-community-cards { top:73%; gap:7px; }
+.card-room .pk-community-cards .pk-card { width:66px; height:93px; }
+.card-room .pk-opp-seat { width:82px; gap:3px; }
+.card-room .pk-opp-avatar { width:48px; height:48px; border:2px solid #d6c39b; box-shadow:0 2px 10px #0009,0 0 0 4px #152624; }
+.card-room .pk-opp-name { max-width:84px; font-size:11px; padding:3px 8px 1px; background:#101c1cdb; border-radius:7px 7px 0 0; }
+.card-room .pk-opp-stack { font-size:10px; padding:1px 8px 3px; background:#101c1cdb; border-radius:0 0 7px 7px; }
+.card-room .pk-opp-bet-chip { top:90px; background:#142e28; border-color:#c1a36780; }
+.card-room .pk-opp-cardback-row { top:-11px; }
+.card-room .pk-me-panel { padding:8px 12px; border:1px solid #dbc88b30; border-radius:14px; background:linear-gradient(110deg,#253332d9,#141f20cc); box-shadow:0 4px 14px #0004; gap:12px; }
+.card-room .pk-me-cards .pk-card { width:62px; height:88px; }
+.card-room .pk-me-avatar { width:42px; height:42px; border-color:#c4a56b; }
+.card-room .pk-me-name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.card-room .pk-action-bar { position:relative; inset:auto; flex-shrink:0; min-height:0; padding:10px max(16px,env(safe-area-inset-right)) calc(10px + var(--safe-bottom)) max(16px,env(safe-area-inset-left)); gap:9px; }
+.card-room .pk-action-btns button { min-height:46px; border:1px solid #ffffff24; border-radius:10px; box-shadow:inset 0 1px #ffffff20,0 3px 6px #0004; }
+.card-room .pk-btn-fold { background:linear-gradient(#673b3d,#45272a); color:#f9dcdc; }
+.card-room .pk-btn-check { background:linear-gradient(#3a7b66,#235744); color:#effff3; }
+.card-room .pk-btn-raise { background:linear-gradient(#ab915c,#7e6339); color:#fff8df; }
+.card-room .pk-btn-allin { background:linear-gradient(#455a68,#293d49); color:#e5f3f7; }
+.card-room .pk-action-btns button:disabled { opacity:.43; filter:saturate(.35); }
+.card-room .pk-leave-table-row button { min-height:32px; }
+.card-room .pk-raise-row input { min-height:32px; min-width:0; accent-color:#c9ad73; }
+
+/* Joker: an open card table, a quiet score plaque, and an unclipped hand. */
+.card-room .jk-table { min-height:0; margin:24px 24px 16px; overflow:visible; border:11px solid #282c2d; border-radius:46% / 25%; background:var(--cloth),radial-gradient(ellipse at 50% 40%,var(--table-light),var(--table-mid) 60%,var(--table-dark)); box-shadow:0 0 0 1px #b69b6266,0 0 0 5px #11191c,0 0 0 6px #7e663e,inset 0 0 0 2px #a9c2c13b,inset 0 0 50px #0007,0 14px 28px #0006; }
+.card-room .jk-scoreboard { top:16px; left:20px; padding:9px 10px; background:linear-gradient(130deg,#17282dee,#0b1b20ee); border-color:#b7b18a4d; box-shadow:0 4px 12px #0005; backdrop-filter:none; }
+.card-room .jk-sb-row { font-size:11px; gap:8px; }
+.card-room .jk-opp-top { top:16px; }
+.card-room .jk-opp-left { left:22px; top:56%; }
+.card-room .jk-opp-right { right:22px; top:56%; }
+.card-room .jk-opp-avatar { border-color:#bdc6bb; box-shadow:0 3px 10px #0008,0 0 0 4px #10232a; }
+.card-room .jk-opp-name { background:#102027d9; padding:3px 7px; border-radius:5px; font-size:11px; }
+.card-room .jk-opp-stats { font-size:10px; }
+.card-room .jk-center { inset:70px 96px 20px; }
+.card-room .jk-trick-area { width:200px; height:200px; flex-shrink:0; }
+.card-room .jk-trick-slot { width:54px; height:76px; }
+.card-room .jk-trick-slot .jk-card { width:100%; height:100%; }
+.card-room .jk-hand-label { bottom:-20px; color:#d0ded4a6; }
+.card-room .jk-me-bar { padding:8px 22px; }
+.card-room .jk-my-hand-wrap { padding:20px 12px calc(14px + var(--safe-bottom)); overflow-y:hidden; }
+.card-room .jk-my-hand { gap:0; width:max-content; min-width:100%; padding:0 10px 4px; }
+.card-room .jk-hand-card { width:66px; height:94px; margin-left:-13px; border:2px solid transparent; }
+.card-room .jk-hand-card.legal { border-color:#f0d28c; box-shadow:0 2px 0 #ad975d,0 5px 12px #0006,0 0 0 1px #f0d28c80; }
+.card-room .jk-hand-card.illegal { opacity:.53; }
+.card-room .jk-trump-chip-card { flex-shrink:0; }
+.card-room .jk-trump-card-display { width:64px; height:90px; }
+.card-room .jk-bid-choice { border:1px solid #cdb87a55; background:linear-gradient(#344943,#1e302c); }
+.card-room .jk-joker-choice.high { background:linear-gradient(#367866,#205144); }
+.card-room .jk-joker-choice.low { background:linear-gradient(#58626a,#303d47); }
+
+/* Blackjack: the dealer and player hands share one felt surface. */
+.card-room .bj-table-body { min-height:0; position:relative; margin:26px 24px 18px; padding:20px 24px; border:12px solid #292925; border-radius:40px 40px 90px 90px; gap:26px; background:var(--cloth),radial-gradient(ellipse at 50% 25%,var(--table-light),var(--table-mid) 55%,var(--table-dark)); box-shadow:0 0 0 1px #a18a566e,0 0 0 5px #111b1c,0 0 0 6px #7e663e,inset 0 0 0 2px #bda96b5e,inset 0 0 45px #0008,0 14px 28px #0007; }
+.card-room .bj-dealer-area { padding-top:0; gap:8px; }
+.card-room .bj-dealer-label { color:#d9c899; letter-spacing:.15em; font-size:11px; }
+.card-room .bj-card-row { min-height:86px; flex-wrap:wrap; gap:7px; }
+.card-room .bj-card-row .bj-card { width:60px; height:84px; }
+.card-room .bj-players-row { gap:12px; align-items:flex-start; margin-block:auto; }
+.card-room .bj-seat { flex:1 1 154px; min-width:0; max-width:240px; padding:12px; border:1px solid #c3c8b72b; background:linear-gradient(135deg,#0d2923b0,#071e18a0); box-shadow:0 5px 14px #0003; }
+.card-room .bj-seat.me { background:linear-gradient(135deg,#1b3e32ed,#102e26ed); border-color:#c6ab6b80; }
+.card-room .bj-seat.acting { border-color:#e6c680; box-shadow:0 0 0 2px #e6c68040,0 5px 18px #0006; }
+.card-room .bj-seat-head { flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.card-room .bj-seat-name { min-width:0; }
+.card-room .bj-seat-stack { margin-left:auto; font-size:11px; }
+.card-room .bj-hand-cards { gap:0; padding-bottom:4px; }
+.card-room .bj-hand-cards .bj-card { width:54px; height:76px; }
+.card-room .bj-hand-cards .bj-card + .bj-card { margin-left:-12px; }
+.card-room .bj-hand-meta { flex-wrap:wrap; gap:6px; font-size:11px; }
+.card-room .bj-hand-total { display:inline-grid; place-items:center; min-width:24px; height:24px; border:1px solid #e0cd8d66; border-radius:50%; background:#0b201c; color:#f9e7b4; }
+.card-room .bj-hand-block { margin-bottom:12px; }
+.card-room .bj-action-panel { position:relative; inset:auto; flex-shrink:0; padding:10px max(16px,env(safe-area-inset-right)) calc(10px + var(--safe-bottom)) max(16px,env(safe-area-inset-left)); }
+.card-room .bj-bet-chip-btn { min-height:44px; border-radius:22px; border:2px dashed #a9b8b499; background:linear-gradient(#344642,#1d302b); box-shadow:0 0 0 2px #131e1d,inset 0 0 0 2px #a9b8b433,0 3px 4px #0005; color:#f3e8cb; }
+.card-room .bj-bet-chip-btn.selected { background:linear-gradient(#a98b50,#72562f); border-color:#f6e1ac; }
+.card-room .bj-bet-chip-btn:disabled { opacity:.35; }
+.card-room :is(.bj-act-btn,.bj-bet-submit-btn) { min-height:46px; border:1px solid #ffffff26; box-shadow:inset 0 1px #ffffff20,0 3px 6px #0004; }
+.card-room .bj-act-btn.hit { background:linear-gradient(#3a7b66,#235744); }
+.card-room .bj-act-btn.stand { background:linear-gradient(#455a68,#293d49); }
+.card-room .bj-act-btn.double { background:linear-gradient(#ab915c,#7e6339); color:#fff8df; }
+.card-room .bj-act-btn.split { background:linear-gradient(#665c7c,#413a55); }
+
+@media (min-width:700px) and (min-height:501px) {
+  .card-room #app { width:min(1100px,96vw); max-width:1100px; height:94vh; height:94dvh; border-radius:22px; border:1px solid #bca26b40; box-shadow:0 30px 100px #0009; }
+}
+@media (max-width:600px) and (orientation:portrait) {
+  .card-room .pk-table-body { padding:24px 16px 8px; gap:8px; }
+  .card-room .pk-table-oval { border-width:9px; margin-inline:12px; }
+  .card-room .pk-opp-seat { width:62px; gap:2px; }
+  .card-room .pk-opp-avatar { width:38px; height:38px; }
+  .card-room .pk-opp-name { max-width:68px; font-size:10px; }
+  .card-room .pk-opp-stack { font-size:9px; }
+  .card-room .pk-opp-bet-chip { top:76px; font-size:9px; }
+  .card-room .pk-community-cards { gap:4px; }
+  .card-room .pk-community-cards .pk-card { width:38px; height:54px; }
+  .card-room .pk-me-cards .pk-card { width:43px; height:61px; }
+  .card-room .pk-me-panel { padding:6px 8px; gap:8px; }
+  .card-room .pk-action-bar { padding-inline:10px; gap:6px; }
+  .card-room .pk-action-btns { gap:5px; }
+  .card-room .pk-action-btns button { font-size:12px; }
+  .card-room .jk-table { margin:16px 12px 12px; border-width:8px; border-radius:40% / 20%; }
+  .card-room .jk-scoreboard { top:14px; left:12px; padding:6px 7px; }
+  .card-room .jk-sb-row { font-size:10px; gap:4px; }
+  .card-room .jk-opp-left { left:8px; }
+  .card-room .jk-opp-right { right:8px; }
+  .card-room .jk-center { inset:80px 60px 20px; }
+  .card-room .jk-trick-area { width:160px; height:170px; }
+  .card-room .jk-trick-slot { width:44px; height:62px; }
+  .card-room .jk-hand-card { width:54px; height:77px; margin-left:-21px; }
+  .card-room .jk-my-hand-wrap { padding-inline:4px; }
+  .card-room .jk-me-bar { padding:7px 12px; }
+  .card-room .bj-table-body { margin:18px 12px 12px; padding:14px 10px; border-width:8px; gap:20px; border-radius:30px; }
+  .card-room .bj-card-row .bj-card { width:48px; height:68px; }
+  .card-room .bj-card-row { min-height:68px; }
+  .card-room .bj-seat { flex-basis:125px; padding:9px; }
+  .card-room .bj-hand-cards .bj-card { width:39px; height:55px; }
+  .card-room .bj-players-row { gap:8px; }
+  .card-room .bj-bet-row { gap:5px; }
+  .card-room .bj-bet-chip-btn { font-size:11px; padding-inline:2px; }
+}
+
+/* Landscape phones: reserve a thumb-friendly control column, never cover the table. */
+@media (orientation:landscape) and (max-height:500px) {
+  .card-room #app { width:100%; max-width:none; height:100vh; height:var(--app-height,100dvh); border:0; border-radius:0; box-shadow:none; }
+  .card-room :is(.pk-header,.bj-header,.jk-header,.jk-game-header) { min-height:44px; padding-block:2px; padding-top:calc(2px + var(--safe-top)); gap:8px; }
+  .card-room :is(.pk-icon-btn,.bj-icon-btn,.jk-icon-btn) { width:40px; height:40px; }
+  .card-room-poker #tableScreen,.card-room-blackjack #tableScreen { display:none; grid-template-columns:minmax(0,1fr) calc(190px + env(safe-area-inset-right)); grid-template-rows:calc(44px + var(--safe-top)) minmax(0,1fr); }
+  .card-room-poker #tableScreen.visible,.card-room-blackjack #tableScreen.visible { display:grid; }
+  .card-room #tableScreen > :is(.pk-header,.bj-header) { grid-column:1 / -1; grid-row:1; }
+  .card-room .pk-table-body { grid-column:1; grid-row:2; padding:14px 24px 6px max(24px,env(safe-area-inset-left)); gap:8px; }
+  .card-room .pk-table-oval { margin:10px 8px 0; border-width:8px; }
+  .card-room .pk-opp-seat { width:60px; gap:1px; }
+  .card-room .pk-opp-avatar { width:32px; height:32px; }
+  .card-room .pk-opp-name { max-width:68px; font-size:9px; padding:2px 5px 0; }
+  .card-room .pk-opp-stack { font-size:9px; padding:0 5px 2px; }
+  .card-room .pk-opp-bet-chip { top:63px; font-size:8px; padding:1px 5px; }
+  .card-room .pk-opp-cardback-row .pk-card { width:12px; height:17px; }
+  .card-room .pk-opp-cardback-row.revealed .pk-card { width:21px; height:30px; }
+  .card-room .pk-stage-label { top:38%; font-size:9px; }
+  .card-room .pk-center-pot { top:53%; }
+  .card-room .pk-pot-amount { font-size:12px; padding:3px 12px; }
+  .card-room .pk-community-cards { gap:4px; top:76%; }
+  .card-room .pk-community-cards .pk-card { width:36px; height:51px; }
+  .card-room .pk-me-panel { padding:4px 10px; gap:10px; border-radius:10px; }
+  .card-room .pk-me-cards .pk-card { width:34px; height:48px; }
+  .card-room .pk-me-avatar { width:30px; height:30px; }
+  .card-room .pk-me-name { font-size:12px; }
+  .card-room .pk-me-stack { font-size:11px; }
+  .card-room .pk-action-bar { grid-column:2; grid-row:2; inset:auto; width:auto; border-left:1px solid #c9b37e38; border-top:0; justify-content:center; padding:10px max(12px,env(safe-area-inset-right)) max(8px,var(--safe-bottom)) 12px; gap:10px; overflow-y:auto; }
+  .card-room .pk-action-btns { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .card-room .pk-action-btns button { min-height:48px; padding:8px 3px; font-size:11px; }
+  .card-room .pk-raise-row { flex-wrap:wrap; gap:0; }
+  .card-room .pk-raise-row input { width:100%; flex-basis:100%; }
+  .card-room .pk-raise-amount { font-size:12px; width:100%; }
+  .card-room .pk-leave-table-row button { min-height:36px; }
+  .card-room .pk-waiting-label { font-size:10px; }
+  .card-room .bj-table-body { grid-column:1; grid-row:2; display:grid; grid-template-columns:100px minmax(0,1fr); grid-template-rows:minmax(0,1fr); align-items:center; margin:16px; padding:12px; gap:12px; border-width:8px; border-radius:30px; }
+  .card-room .bj-dealer-area { gap:7px; min-height:0; max-height:100%; overflow-y:auto; }
+  .card-room .bj-card-row { flex-wrap:wrap; min-height:0; gap:4px; }
+  .card-room .bj-card-row .bj-card { width:40px; height:56px; }
+  .card-room .bj-players-row { flex-wrap:nowrap; justify-content:flex-start; align-items:flex-start; max-height:100%; min-height:0; overflow:auto; overscroll-behavior:contain; scroll-snap-type:x proximity; gap:10px; padding:5px; margin:0; }
+  .card-room .bj-seat { flex:0 0 156px; padding:10px; scroll-snap-align:start; }
+  .card-room .bj-seat.me { order:-1; }
+  .card-room .bj-hand-cards .bj-card { width:40px; height:56px; }
+  .card-room .bj-action-panel { grid-column:2; grid-row:2; width:auto; padding:12px max(12px,env(safe-area-inset-right)) max(8px,var(--safe-bottom)) 12px; border-top:0; border-left:1px solid #c9b37e38; overflow-y:auto; align-content:center; }
+  .card-room .bj-actions-row { display:flex; flex-wrap:wrap; gap:8px; }
+  .card-room .bj-act-btn { flex:0 0 calc(50% - 4px); min-width:0; min-height:48px; font-size:11px; }
+  .card-room .bj-dealer-area::after { content:"ხელები ↔"; font-size:9px; color:#c3d3bc; }
+  .card-room .bj-bet-row { flex-wrap:wrap; gap:8px; justify-content:center; }
+  .card-room .bj-bet-chip-btn { flex:0 0 calc(50% - 4px); min-height:40px; font-size:11px; padding:7px 2px; }
+  .card-room .bj-bet-submit-btn { min-height:44px; font-size:12px; }
+  .card-room .bj-timer-chip { font-size:11px; }
+  .card-room-joker #gameScreen { display:none; grid-template-columns:154px minmax(0,1fr); grid-template-rows:calc(44px + var(--safe-top)) minmax(0,1fr) calc(86px + var(--safe-bottom)); }
+  .card-room-joker #gameScreen.visible { display:grid; }
+  .card-room .jk-game-header { grid-column:1 / -1; grid-row:1; }
+  .card-room .jk-table { grid-column:1 / -1; grid-row:2; margin:12px 24px 9px; border-width:7px; border-radius:42% / 28%; }
+  .card-room .jk-scoreboard { top:8px; left:16px; padding:5px 7px; display:grid; grid-template-columns:1fr 1fr; gap:4px 10px; min-width:0; }
+  .card-room .jk-sb-row { font-size:9px; gap:4px; }
+  .card-room .jk-sb-name { max-width:32px; }
+  .card-room .jk-sb-score { min-width:16px; }
+  .card-room .jk-opp { width:76px; gap:2px; }
+  .card-room .jk-opp-top { display:grid; grid-template-columns:36px 85px; grid-template-rows:19px 19px; column-gap:8px; width:129px; top:7px; }
+  .card-room .jk-opp-top .jk-opp-avatar-wrap { grid-column:1; grid-row:1 / 3; }
+  .card-room .jk-opp-top .jk-opp-name { grid-column:2; grid-row:1; max-width:85px; }
+  .card-room .jk-opp-top .jk-opp-stats { grid-column:2; grid-row:2; }
+  .card-room .jk-opp-left { left:20px; top:65%; }
+  .card-room .jk-opp-right { right:20px; top:65%; }
+  .card-room .jk-opp-avatar { width:34px; height:34px; }
+  .card-room .jk-opp-name { font-size:10px; padding:2px 5px; }
+  .card-room .jk-opp-stats { font-size:9px; }
+  .card-room .jk-center { inset:46px 105px 12px; }
+  .card-room .jk-trick-area { width:clamp(116px,37vh,150px); height:clamp(116px,37vh,150px); }
+  .card-room .jk-trick-slot { width:36px; height:51px; }
+  .card-room .jk-hand-label { bottom:-14px; font-size:9px; }
+  .card-room .jk-me-bar { grid-column:1; grid-row:3; flex-wrap:wrap; align-content:center; gap:3px 7px; padding:5px 8px 5px max(12px,env(safe-area-inset-left)); border-right:1px solid #d3b57135; }
+  .card-room .jk-me-avatar { width:28px; height:28px; }
+  .card-room .jk-me-info { flex:1; }
+  .card-room .jk-me-name { font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .card-room .jk-me-stats { font-size:9px; }
+  .card-room .jk-me-timer { font-size:11px; }
+  .card-room .jk-my-hand-wrap { grid-column:2; grid-row:3; padding:14px max(8px,env(safe-area-inset-right)) calc(5px + var(--safe-bottom)) 8px; }
+  .card-room .jk-hand-card { width:46px; height:65px; margin-left:-9px; }
+  .card-room .jk-my-hand { padding-inline:6px; }
+  .card-room .jk-trump-chip { padding:2px 8px; gap:6px; }
+  .card-room .jk-trump-chip-card.jk-card { width:22px; height:31px; }
+  .card-room :is(.jk-modal,.jk-overlay,.pk-result-overlay) { padding:12px; }
+  .card-room .jk-modal-box { max-width:480px; padding:14px 18px; }
+  .card-room .jk-bid-trump-wrap { float:left; margin:4px 18px 4px 0; }
+  .card-room .jk-bid-grid { gap:7px; }
+  .card-room .jk-bid-choice { width:44px; height:44px; }
+  .card-room :is(.pk-chat-panel,.jk-chat-panel,.bj-chat-panel) { left:auto; right:max(8px,env(safe-area-inset-right)); width:min(360px,80vw); height:calc(100dvh - 12px); max-height:none; }
+  .card-room :is(.pk-setup-body,.bj-setup-body,.jk-setup-body,.pk-lobby-body,.bj-lobby-body,.jk-lobby-body) { padding-block:14px; }
+  .card-room :is(.pk-lobby-actions,.bj-lobby-actions,.jk-lobby-actions) { padding-block:8px; flex-direction:row; flex-wrap:wrap; }
+  .card-room :is(.pk-lobby-actions,.bj-lobby-actions,.jk-lobby-actions) > button { flex:1; min-height:44px; }
+}
+
+@media (max-width:360px) and (orientation:portrait) {
+  .card-room :is(.pk-header-title,.bj-header-title,.jk-header-title) { font-size:14px; }
+  .card-room :is(.pk-coin-chip,.bj-coin-chip) { padding:5px 7px; font-size:11px; }
+  .card-room .pk-table-body { padding-top:16px; }
+  .card-room .pk-opp-avatar { width:32px; height:32px; }
+  .card-room .pk-opp-seat { gap:1px; }
+  .card-room .pk-opp-name { font-size:9px; padding:2px 4px 0; }
+  .card-room .pk-opp-stack { font-size:8px; padding:0 4px 2px; }
+  .card-room .pk-opp-bet-chip { top:62px; font-size:8px; padding:1px 3px; }
+  .card-room .pk-community-cards { top:82%; gap:3px; }
+  .card-room .pk-community-cards .pk-card { width:30px; height:43px; }
+  .card-room .pk-stage-label { top:37%; font-size:9px; }
+  .card-room .pk-center-pot { top:52%; }
+  .card-room .jk-hand-card { width:46px; height:65px; margin-left:-16px; }
+  .card-room .jk-scoreboard { left:4px; width:88px; min-width:0; padding:5px; }
+  .card-room .jk-sb-name { min-width:0; }
+  .card-room .jk-center { inset:94px 60px 20px; }
+  .card-room .jk-trick-area { width:120px; height:152px; }
+  .card-room .jk-trick-slot { width:34px; height:48px; }
+}
+@media (orientation:landscape) and (max-height:360px) {
+  .card-room .jk-center { inset:60px 105px 0; }
+  .card-room .jk-trick-area { width:108px; height:108px; }
+  .card-room .jk-trick-slot { width:32px; height:45px; }
+  .card-room .jk-hand-label { bottom:auto; top:45%; left:calc(100% + 14px); transform:none; font-size:8px; }
+}
