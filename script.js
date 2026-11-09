@@ -1595,8 +1595,7 @@ let _reconnectNameRetries = 0;
 const _RECONNECT_NAME_MAX_RETRIES = 5;
 
 socket.on("nameTaken", () => {
-  saveNameBtn.disabled    = false;
-  saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
+  _resetSaveBtn();
 
   if (isReconnecting) {
     // The server still has our old socket registered under our name.
@@ -1634,6 +1633,11 @@ socket.on("nameTaken", () => {
 
   _reconnectNameRetries = 0;
   isReconnecting = false;
+  if (!window.gaicaniAuthUser) {
+    nameModal.style.display = "flex";
+    showNameError("სტუმრის სახელის მინიჭება ვერ მოხერხდა. სცადეთ ხელახლა.");
+    return;
+  }
   showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ. 😟 ");
   nameInput.focus();
   nameInput.select();

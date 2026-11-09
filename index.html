@@ -368,11 +368,19 @@ body:not(.rc-theme-light):not(.rc-theme-pink):not(.rc-theme-ocean):not(.rc-theme
 <script>
   (function () {
     var overlay = document.getElementById("rulesGateOverlay");
+    var rulesKey = "gaicani_rules_accepted_v1";
+    try {
+      if (localStorage.getItem(rulesKey) === "yes") {
+        overlay.remove();
+        return;
+      }
+    } catch (_) {}
 
     // Freeze the page underneath until answered.
     document.documentElement.style.overflow = "hidden";
 
     document.getElementById("rulesGateAgree").addEventListener("click", function () {
+      try { localStorage.setItem(rulesKey, "yes"); } catch (_) {}
       document.documentElement.style.overflow = "";
       overlay.remove();
     });
