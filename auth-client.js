@@ -973,6 +973,7 @@
     if (!inp) return;
     const text = inp.value.trim();
     if (!text) return;
+    window.GaicaniChatAds?.count("private");
     inp.value = "";
 
     authSocket?.emit("privateMsg:send", { toUsername: privChatPartner, message: text });
