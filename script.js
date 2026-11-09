@@ -1952,6 +1952,7 @@ socket.on("partnerDisconnected", (data = {}) => {
 
     offerEl.querySelector("#blockOfferBtn").addEventListener("click", () => {
       offerEl.remove();
+      window.GaicaniChatAds?.count("block");
       emitBlockUser(lastPartnerName);
     });
 
@@ -2115,6 +2116,7 @@ nextBtn.addEventListener("click", () => {
     return;
   }
   nextBtn.disabled = true;
+  window.GaicaniChatAds?.count("search");
   setTimeout(() => { nextBtn.disabled = false; }, 1200);
 
   // Stop any stale state synchronously first
@@ -2140,6 +2142,7 @@ nextBtn.addEventListener("click", () => {
 blockBtn.addEventListener("click", () => {
   const targetName = partnerName || lastPartnerName;
   if (!targetName) return;
+  window.GaicaniChatAds?.count("block");
   showConfirmModal(
     `Block "${targetName}"? თქვენ ვეღარ შეხვდებით ამ იუზერს ბლოკის შემდეგ. 😡`,
     "🚫 დაბლოკვა",
