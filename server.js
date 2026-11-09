@@ -3587,6 +3587,13 @@ io.on("connection", (socket) => {
       trimmed = assigned;
     }
 
+    // During a fresh entry a guest cannot resolve a collision by choosing a
+    // name. Keep a resumable session, otherwise assign an available name.
+    if (!isRealAccount && !resumeChat && GUEST_NAME_RE.test(trimmed) && !canUseGuestChatName(socket, trimmed)) {
+      trimmed = generateGuestName();
+      if (!trimmed) { socket.emit("nameTaken"); return; }
+    }
+
     if (trimmed.length < NAME_MIN || trimmed.length > NAME_MAX) return;
 
     // Banned-word check on the display name itself.
@@ -3603,6 +3610,9 @@ io.on("connection", (socket) => {
     }
 
     function acceptName() {
+      if (socket._regUser?.isGuest && socket._regUser.username !== trimmed) {
+        startGuestSession(socket, trimmed);
+      }
       socket.userName = trimmed;
       socket._randomChatName = lowerTrimmed;
       socket.emit("nameAccepted", trimmed);
@@ -5636,6 +5646,15 @@ const FLAPPY_COIN_REWARD  = 10000;
 // is accepted as "this is still me", anything else is replaced.
 const GUEST_NAME_RE = /^სტუმარი\d{4}$/;
 
+function canUseGuestChatName(socket, name) {
+  const key = name.toLowerCase();
+  return !authReservedNames.has(key) && (
+    socket._randomChatName === key ||
+    (!activeUsernames.has(key) && !pendingDisconnects.has(key)) ||
+    randomReconnect.canResume(socket, key)
+  );
+}
+
 function generateGuestName() {
   for (let i = 0; i < 50; i++) {
     const n  = `სტუმარი${Math.floor(1000 + Math.random() * 9000)}`;
@@ -5645,6 +5664,56 @@ function generateGuestName() {
     if (!registeredUsers.has(lc) && !activeUsernames.has(lc)) return n;
   }
   return null; // 50 collisions in a row — effectively impossible, handled by callers
+}
+
+function endGuestSession(socket) {
+  const lc = guestSocketMap.get(socket.id);
+  if (!lc) return;
+  guestSocketMap.delete(socket.id);
+  authTokens.delete(guestTokenMap.get(socket.id));
+  guestTokenMap.delete(socket.id);
+  socket.leave(`user:${lc}`);
+  const sockets = onlineRegSockets.get(lc);
+  if (sockets) {
+    sockets.delete(socket.id);
+    if (!sockets.size) onlineRegSockets.delete(lc);
+  }
+  if (![...guestSocketMap.values()].includes(lc)) {
+    registeredUsers.delete(lc);
+    announceOnlineChanged();
+  }
+}
+
+function startGuestSession(socket, username) {
+  endGuestSession(socket);
+  const lc = username.toLowerCase();
+  const guestUser = registeredUsers.get(lc) || {
+    username, isGuest: true, createdAt: new Date().toISOString(),
+    friends: [], pendingRequests: [], avatar: GUEST_AVATAR, bio: "",
+  };
+  registeredUsers.set(lc, guestUser);
+  guestSocketMap.set(socket.id, lc);
+
+  socket._regUser = { usernameLower: lc, username, isGuest: true };
+  socket.userName = username;
+  if (!onlineRegSockets.has(lc)) onlineRegSockets.set(lc, new Set());
+  onlineRegSockets.get(lc).add(socket.id);
+  socket.join(`user:${lc}`);
+
+  // Also issue a short-lived REST token (reusing the same authTokens /
+  // requireRegAuth path real accounts use) so the client can fetch
+  // read-only content over REST, not just sockets. Tracked
+  // for cleanup alongside the rest of the guest session on disconnect.
+  const guestToken = authToken();
+  authTokens.set(guestToken, { usernameLower: lc, expiry: Date.now() + GUEST_TOKEN_TTL, isGuest: true });
+  guestTokenMap.set(socket.id, guestToken);
+
+  socket.emit("auth:authenticated", {
+    username, friends: [], pendingRequests: [], avatar: guestUser.avatar || GUEST_AVATAR, bio: guestUser.bio || "",
+    streaks: {}, isAdmin: false, isPro: false, isGuest: true, guestToken
+  });
+  console.log(`[AUTH] ${username} started a guest session`);
+  announceOnlineChanged();
 }
 
 // Presence as OTHER people see it. A user who switched on "appear offline"
@@ -11123,78 +11192,17 @@ io.on("connection", (socket) => {
   socket.on("auth:guest", (data) => {
     if (socket._regUser) return; // already authenticated one way or the other
 
-    // If the client remembers a name from earlier in this browser session —
-    // either a guest name from a previous dashboard/game visit, or (more
-    // commonly) whatever they already typed in for random chat via setName
-    // — reuse it so they show up as themselves everywhere instead of a
-    // random "სტუმარი####". Same length/character rules as any other
-    // chosen name on this site (see setName / registration).
-    //
-    // Crucially: if that name is currently held by ANOTHER GUEST entry
-    // (not a real account), it's still safe to take over — this is almost
-    // always this exact same person's previous page, whose socket just
-    // hasn't finished disconnecting yet (socket.io detects a closed tab
-    // with a short delay, not instantly), not a different person. Reusing
-    // that existing record (rather than creating a fresh one) also means
-    // whatever coins/progress they'd built up on the previous page carry
-    // over instead of resetting on every navigation.
-    const preferred = (data && typeof data.preferredUsername === "string") ? data.preferredUsername.trim() : null;
-    const existingHolder = preferred ? registeredUsers.get(preferred.toLowerCase()) : null;
-    // Only an already-assigned "სტუმარი####" may be carried over — that's a
-    // guest continuing across pages. Anything else (a name they typed into
-    // random chat, say) is ignored and they get a fresh guest name instead.
-    // GUEST_NAME_RE is stricter than the old length/charset/banned-word
-    // checks it replaces, so those are implied.
-    const preferredValid = preferred
-      && GUEST_NAME_RE.test(preferred)
-      && (!existingHolder || existingHolder.isGuest);
-
-    let username, lc, guestUser;
-    if (preferredValid) {
-      username = preferred;
-      lc = username.toLowerCase();
-      guestUser = existingHolder || {
-        username, isGuest: true, createdAt: new Date().toISOString(),
-        friends: [], pendingRequests: [], avatar: GUEST_AVATAR, bio: "",
-      };
-    } else {
-      let attempts = 0;
-      do {
-        username = `სტუმარი${Math.floor(1000 + Math.random() * 9000)}`;
-        lc = username.toLowerCase();
-        attempts++;
-      } while (registeredUsers.has(lc) && attempts < 25);
-      if (registeredUsers.has(lc)) { socket.emit("auth:invalid"); return; } // pathological luck, extremely unlikely
-      guestUser = {
-        username, isGuest: true, createdAt: new Date().toISOString(),
-        friends: [], pendingRequests: [], avatar: GUEST_AVATAR, bio: "",
-      };
-    }
-
-    registeredUsers.set(lc, guestUser);
-    guestSocketMap.set(socket.id, lc);
-
-    socket._regUser = { usernameLower: lc, username, isGuest: true };
+    // The chat handshake can finish before guest auth. If it did, use the
+    // accepted name instead of the older value sent from sessionStorage.
+    const preferred = socket._randomChatName ? socket.userName
+      : typeof data?.preferredUsername === "string" ? data.preferredUsername.trim() : "";
+    const holder = registeredUsers.get(preferred.toLowerCase());
+    const username = GUEST_NAME_RE.test(preferred) && (!holder || holder.isGuest)
+      ? preferred
+      : generateGuestName();
+    if (!username) { socket.emit("auth:invalid"); return; }
+    startGuestSession(socket, username);
     evictGhostOf(socket);
-    socket.userName = username;
-    if (!onlineRegSockets.has(lc)) onlineRegSockets.set(lc, new Set());
-    onlineRegSockets.get(lc).add(socket.id);
-    socket.join(`user:${lc}`);
-
-    // Also issue a short-lived REST token (reusing the same authTokens /
-    // requireRegAuth path real accounts use) so the client can fetch
-    // read-only content over REST, not just sockets. Tracked
-    // for cleanup alongside the rest of the guest session on disconnect.
-    const guestToken = authToken();
-    authTokens.set(guestToken, { usernameLower: lc, expiry: Date.now() + GUEST_TOKEN_TTL, isGuest: true });
-    guestTokenMap.set(socket.id, guestToken);
-
-    socket.emit("auth:authenticated", {
-      username, friends: [], pendingRequests: [], avatar: guestUser.avatar || GUEST_AVATAR, bio: guestUser.bio || "",
-      streaks: {}, isAdmin: false, isPro: false, isGuest: true, guestToken
-    });
-    console.log(`[AUTH] ${username} started a guest session`);
-    announceOnlineChanged();
   });
 
   // ── auth:guest:rename — DISABLED. Guests can no longer choose a name at
@@ -13938,21 +13946,7 @@ io.on("connection", (socket) => {
     // A guest's identity lives only as long as they're connected somewhere —
     // once their last socket disconnects, their temporary shadow account
     // disappears entirely (it was never written to disk regardless).
-    if (guestSocketMap.has(socket.id)) {
-      const lc = guestSocketMap.get(socket.id);
-      guestSocketMap.delete(socket.id);
-      if (guestTokenMap.has(socket.id)) {
-        authTokens.delete(guestTokenMap.get(socket.id));
-        guestTokenMap.delete(socket.id);
-      }
-      const sockets = onlineRegSockets.get(lc);
-      if (sockets) { sockets.delete(socket.id); if (sockets.size === 0) onlineRegSockets.delete(lc); }
-      const stillConnected = [...guestSocketMap.values()].includes(lc);
-      if (!stillConnected) {
-        registeredUsers.delete(lc);
-        announceOnlineChanged();
-      }
-    }
+    endGuestSession(socket);
   });
 });
 
