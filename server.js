@@ -4044,7 +4044,7 @@ io.on("connection", (socket) => {
   });
 
   // ── Next ─────────────────────────────────────────────────────────────────
-  socket.on("next", () => {
+  socket.on("next", (options) => {
     if (!socket.userName) return;
 
     if (socket.partner) {
@@ -4070,7 +4070,11 @@ io.on("connection", (socket) => {
       cleanupGameForSocket(oldPartnerId);
     }
 
-    // User pressed Search — start looking for a partner via the queue system
+    if (options?.search === false) {
+      waitingQueue = waitingQueue.filter(s => s.id !== socket.id);
+      broadcastQueuePositions();
+      return;
+    }
     tryFindPartner();
   });
 
