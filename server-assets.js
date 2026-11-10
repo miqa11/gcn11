@@ -20,7 +20,13 @@ const ASSET_RE = /(\s(?:src|srcset|href)=["'])(\/?)([A-Za-z0-9_./-]+\.(?:js|css|
 const SOCKET_IO_RE = /(["'])\/socket\.io\/socket\.io(?:\.min)?\.js\1/g;
 const PAGE_TTL_MS = 30_000; // re-read a page (and its files' fingerprints) at most this often
 
-function mountAssets(app, { root }) {
+const MONETAG_TAGS = [
+  '<script src="https://5gvci.com/act/files/tag.min.js?z=11372059" data-cfasync="false" async></script>',
+  "<script>(function(s){s.dataset.zone='11372060',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>",
+  "<script>(function(s){s.dataset.zone='11337565',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>",
+].join("\n");
+
+function mountAssets(app, { root, monetag = false }) {
   root = path.resolve(root);
 
   // Fingerprint of a file's contents, recomputed only when it changes.
@@ -58,6 +64,9 @@ function mountAssets(app, { root }) {
   }
 
   function rewrite(html) {
+    if (monetag) {
+      html = html.replace(/<head(?:\s[^>]*)?>(?:\s*<meta\s[^>]*>)*/i, head => head + "\n" + MONETAG_TAGS + "\n");
+    }
     if (sioFile) html = html.replace(SOCKET_IO_RE, `$1/vendor/socket.io.min.js?v=${sioV}$1`);
     return html.replace(ASSET_RE, (m, pre, slash, rel, fragment, post) => {
       const abs = path.join(root, rel);
