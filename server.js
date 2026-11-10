@@ -1695,7 +1695,7 @@ app.get("/private-photos/:file", async (req, res) => {
 app.get(["/rooms.html", "/forum.html"], (req, res) => res.redirect(301, "/dashboard.html"));
 
 mountCityHours(app);
-const assets = require("./server-assets").mountAssets(app, { root: __dirname });
+const assets = require("./server-assets").mountAssets(app, { root: __dirname, monetag: true });
 app.use(express.static(path.join(__dirname), {
   setHeaders(res, filePath) {
     if (assets.cacheHeaders(res, filePath)) return;
