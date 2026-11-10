@@ -1528,7 +1528,7 @@ body.guest-mode .profile-actions { display: none; }
   </script>
 
   <div class="top-bar">
-    <a href="/" class="site-name">GAICANI</a>
+    <a href="/?welcome=1" class="site-name" id="dashboardLogo">GAICANI</a>
     <div class="top-bar-right">
       <span class="top-bar-username" id="topUsername"></span>
       <button class="btn-logout" id="logoutBtn">გამოსვლა 🚪</button>
@@ -2781,6 +2781,7 @@ function profileChipsHTML(p) {
       });
 
       socket.on("auth:authenticated", ({ username, friends, pendingRequests, avatar, bio, streaks, isGuest, guestToken, isPro, appearOffline, blockedUsers: serverBlockedUsers }) => {
+        document.getElementById("dashboardLogo").href = isGuest ? "/?welcome=1" : "/dashboard.html";
         applyPrivacyState({ appearOffline });
         if (isGuest) {
           try { sessionStorage.setItem("gaicani_guest_username", username); } catch (_) {}

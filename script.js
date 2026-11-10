@@ -1667,6 +1667,7 @@ socket.on("queuePosition", ({ position, total }) => {
 });
 
 socket.on("partnerFound", (partner) => {
+  if (isFirstLogin) return;
   // ── Stop everything searching-related immediately ──────────────────────
   stopSearchRetry();
   // Abort any in-flight fact fetch so stale async work doesn't land after match
@@ -2230,7 +2231,7 @@ document.addEventListener("touchend", (e) => {
 // Called when user clicks the GAICANI logo to return to the welcome screen.
 function goToWelcome() {
   // Registered users: logo click → go to their Dashboard page instead
-  if (window.gaicaniAuthUser) {
+  if (window.gaicaniAuthUser && !window.gaicaniAuthUser.isGuest) {
     window.location.href = "/dashboard.html";
     return;
   }
@@ -2245,8 +2246,9 @@ function goToWelcome() {
   setInputsEnabled(false);
   updateBlockBtn();
 
-  socket.emit("next"); // tell server we're leaving current chat
   stopSearchRetry();
+  dropPending(false);
+  socket.emit("next", { search: false });
   hideTypingIndicator();
   closeGifPickerPanel();
   clearChat();
@@ -2259,10 +2261,13 @@ function goToWelcome() {
   const nameModalClose = document.getElementById("nameModalClose");
   if (nameModalClose) nameModalClose.style.display = "none";
   nameInput.value         = "";
-  saveNameBtn.textContent = "საუბრის დაწყება";
+  _resetSaveBtn();
   clearNameError();
   nameModal.style.display = "flex";
-  setTimeout(() => nameInput.focus(), 100);
+  const guestTab = document.getElementById("auth-tab-guest");
+  guestTab?.click();
+  nameModal.querySelector(".modal-content").scrollTop = 0;
+  guestTab?.focus({ preventScroll: true });
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
@@ -2303,7 +2308,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let _existingGuestName = null;
     try { _existingGuestName = sessionStorage.getItem("gaicani_guest_username"); } catch (_) {}
 
-    if (_existingGuestName) {
+    const welcomeRequested = new URLSearchParams(window.location.search).get("welcome") === "1";
+    if (_existingGuestName && !welcomeRequested) {
       nameInput.value = _existingGuestName;
       if (socket.connected) {
         saveName();
