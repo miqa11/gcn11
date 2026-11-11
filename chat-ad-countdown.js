@@ -2,7 +2,7 @@
   "use strict";
 
   const adUrl = "https://uplcm.com/4/11150018";
-  const limits = { search: 5, block: 5, private: 10 };
+  const limits = { search: 3, block: 3, private: 5 };
   const remaining = {};
   const blocked = {};
 
