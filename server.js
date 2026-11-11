@@ -6658,6 +6658,12 @@ function requireRegAuth(req, res) {
   return { usernameLower: entry.usernameLower, user };
 }
 
+app.get("/api/ads/eligibility", (req, res) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  const auth = requireRegAuth(req, res);
+  if (auth) res.json({ adsAllowed: !isVip(auth.user) });
+});
+
 // GET /api/users/profile?username=X — a small public-profile snapshot for
 // the tap-to-preview card (name, avatar, bio, online-or-not). Any
 // registered user can look up any other by username — the same

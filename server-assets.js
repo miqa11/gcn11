@@ -21,9 +21,12 @@ const SOCKET_IO_RE = /(["'])\/socket\.io\/socket\.io(?:\.min)?\.js\1/g;
 const PAGE_TTL_MS = 30_000; // re-read a page (and its files' fingerprints) at most this often
 
 const MONETAG_TAGS = [
+  '<template id="gaicani-ad-tags">',
   '<script src="https://5gvci.com/act/files/tag.min.js?z=11372059" data-cfasync="false" async></script>',
   "<script>(function(s){s.dataset.zone='11372060',s.src='https://nap5k.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>",
   "<script>(function(s){s.dataset.zone='11337565',s.src='https://n6wxm.com/vignette.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>",
+  "</template>",
+  '<script src="/site-ads.js"></script>',
 ].join("\n");
 
 function mountAssets(app, { root, monetag = false }) {
