@@ -60,6 +60,7 @@
 
   window.GaicaniChatAds = {
     count(kind) {
+      if (document.documentElement.dataset.gaicaniAds !== "enabled" || window.gaicaniAuthUser?.isPro) return;
       if (!Object.hasOwn(limits, kind)) return;
       remaining[kind]--;
       const showAd = remaining[kind] === 0;

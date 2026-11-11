@@ -1,5 +1,5 @@
 .chat-ad-countdown {
-  display: block;
+  display: none;
   flex-shrink: 0;
   color: inherit;
   opacity: .8;
@@ -7,6 +7,9 @@
   line-height: 14px;
   text-align: right;
   pointer-events: none;
+}
+html[data-gaicani-ads="enabled"] .chat-ad-countdown {
+  display: block;
 }
 .chat-ad-open {
   color: inherit;
@@ -27,12 +30,12 @@
   line-height: 12px;
   min-height: 12px;
 }
-.pc-input-row.gc-ad-composer,
-#fc-input-bar.gc-ad-composer {
+html[data-gaicani-ads="enabled"] .pc-input-row.gc-ad-composer,
+html[data-gaicani-ads="enabled"] #fc-input-bar.gc-ad-composer {
   position: relative;
   padding-top: 24px;
 }
-#priv-panel .pc-input-row.gc-ad-composer {
+html[data-gaicani-ads="enabled"] #priv-panel .pc-input-row.gc-ad-composer {
   padding-top: 24px !important;
 }
 .gc-ad-composer > .chat-ad-countdown {
@@ -41,7 +44,7 @@
   right: max(12px, env(safe-area-inset-right));
 }
 
-.right-side.chat-ad-toolbar {
+html[data-gaicani-ads="enabled"] .right-side.chat-ad-toolbar {
   position: relative;
   align-items: flex-start !important;
   min-width: min(248px, 100%);
