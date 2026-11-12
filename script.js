@@ -1392,6 +1392,7 @@ document.addEventListener("click", (e) => {
 
 // ── Name modal ────────────────────────────────────────────────────────────────
 let _saveNameTimeout = null; // tracks the freeze-recovery timer
+let nameTakeoverRequested = false;
 
 function _resetSaveBtn() {
   clearTimeout(_saveNameTimeout);
@@ -1402,12 +1403,14 @@ function _resetSaveBtn() {
   if (_ov) _ov.style.display = "none";
 }
 
-function saveName() {
+function saveName(takeover = false) {
+  if (saveNameBtn.disabled) return;
   let name;
+  const authToken = window.gaicaniAuthUser?.token;
+  nameTakeoverRequested = takeover === true;
   if (window.gaicaniAuthUser) {
-    // Registered account — their own name (set by autoSetNameAfterAuth, or
-    // typed into the change-name modal).
-    name = nameInput.value.trim();
+    name = window.gaicaniAuthUser.username;
+    nameInput.value = name;
   } else {
     // Guests can't choose a name. Send the one this tab was already given,
     // so it stays the same across pages; otherwise a placeholder. Either way
@@ -1424,7 +1427,7 @@ function saveName() {
 
   // If socket isn't connected yet, don't freeze — show a clear error
   if (!socket.connected) {
-    showNameError("იტვირთება საიტი, კიდევ სცადეთ 🔄");
+    showChatStartError("კავშირი ჯერ არ არის მზად. სცადეთ ხელახლა.");
     return;
   }
 
@@ -1438,17 +1441,23 @@ function saveName() {
   // ── Token not ready yet (slow network on page load) ──────────────────────
   // Re-fetch and retry once rather than sending null and getting a tokenInvalid loop
   if (!_challengeToken || !_challengePow) {
-    fetch("/api/challenge")
-      .then(r => r.json())
+    const socketId = socket.id;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    fetch("/api/challenge", { signal: controller.signal })
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(d => {
+        if (socket.id !== socketId || authToken !== window.gaicaniAuthUser?.token) return;
         _challengeToken = d.token;
         _challengePow   = (d.nonce * 31 + d.nonce % 97);
         _doSetName(name);
       })
       .catch(() => {
-        showNameError("კავშირის შეცდომა. გთხოვთ გვერდი განაახლოთ.");
+        if (socket.id !== socketId) return;
         _resetSaveBtn();
-      });
+        showChatStartError("კავშირის შეცდომა. სცადეთ ხელახლა.");
+      })
+      .finally(() => clearTimeout(timeout));
     return;
   }
 
@@ -1459,8 +1468,8 @@ function _doSetName(name) {
   // Safety timeout — re-enable button if server never replies within 8 s
   clearTimeout(_saveNameTimeout);
   _saveNameTimeout = setTimeout(() => {
-    showNameError("სერვერი არ პასუხობს. სცადეთ ხელახლა. 🔄");
     _resetSaveBtn();
+    showChatStartError("სერვერი არ პასუხობს. სცადეთ ხელახლა.");
   }, 8000);
 
   socket.emit("setName", {
@@ -1468,7 +1477,36 @@ function _doSetName(name) {
     token:     _challengeToken,
     powAnswer: _challengePow,
     webdriver: !!navigator.webdriver,
+    takeover: nameTakeoverRequested,
+    resumeChat: isReconnecting && partnerConnected,
   });
+}
+
+function showChatEntryNotice(text, label, action) {
+  document.getElementById("randomChatEntryNotice")?.remove();
+  const notice = document.createElement("div");
+  notice.id = "randomChatEntryNotice";
+  notice.className = "system-message";
+  notice.setAttribute("role", "status");
+  const message = document.createElement("p");
+  message.textContent = text;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "photo-confirm-btn confirm";
+  button.textContent = label;
+  button.addEventListener("click", action);
+  notice.append(message, button);
+  chat.appendChild(notice);
+  scheduleScroll();
+}
+
+function showChatStartError(message) {
+  if (window.gaicaniAuthUser && nameModal.style.display !== "flex") {
+    showChatEntryNotice(message, "ხელახლა ცდა", () => saveName(nameTakeoverRequested));
+  } else {
+    nameModal.style.display = "flex";
+    showNameError(message);
+  }
 }
 
 // ── Socket events ─────────────────────────────────────────────────────────────
@@ -1479,6 +1517,7 @@ function _doSetName(name) {
 // any drop. Deliberate closes (a ban, a name block) are not resumed.
 socket.on("disconnect", (reason) => {
   if (reason === "io server disconnect" || reason === "io client disconnect") return;
+  if (isFirstLogin) _resetSaveBtn();
   if (userName && !isFirstLogin) isReconnecting = true;
 });
 
@@ -1505,27 +1544,31 @@ socket.on("connect", () => {
 
 // Challenge token was missing or expired — silently re-fetch and retry
 socket.on("tokenInvalid", () => {
+  const socketId = socket.id;
+  const authToken = window.gaicaniAuthUser?.token;
   fetch("/api/challenge")
-    .then(r => r.json())
+    .then(r => { if (!r.ok) throw new Error(); return r.json(); })
     .then(d => {
+      if (socket.id !== socketId || authToken !== window.gaicaniAuthUser?.token) return;
       _challengeToken = d.token;
       _challengePow   = (d.nonce * 31 + d.nonce % 97);
       const name = userName || nameInput.value.trim();
       if (name) {
-        socket.emit("setName", { name, token: _challengeToken, powAnswer: _challengePow, resumeChat: isReconnecting && partnerConnected });
+        _doSetName(name);
       }
     })
     .catch(() => {
-      if (!isReconnecting) {
-        showNameError("კავშირის შეცდომა. გთხოვთ გვერდი განაახლოთ.");
-        saveNameBtn.disabled    = false;
-        saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
+      if (socket.id === socketId && !isReconnecting) {
+        _resetSaveBtn();
+        showChatStartError("კავშირის შეცდომა. სცადეთ ხელახლა.");
       }
     });
 });
 
 socket.on("nameAccepted", (acceptedName) => {
   const wasNameChange = !isFirstLogin && !isReconnecting;
+  nameTakeoverRequested = false;
+  document.getElementById("randomChatEntryNotice")?.remove();
   _resetSaveBtn(); // cancel the 8-second safety timeout and re-enable button
   userName                = acceptedName;
   nameModal.style.display = "none";
@@ -1626,9 +1669,36 @@ socket.on("nameTaken", () => {
     showNameError("სტუმრის სახელის მინიჭება ვერ მოხერხდა. სცადეთ ხელახლა.");
     return;
   }
-  showNameError("ეს სახელი დაკავებულია. სხვა აირჩიეთ. 😟 ");
-  nameInput.focus();
-  nameInput.select();
+  showChatStartError("ამ ანგარიშით ჩატის გახსნა ვერ მოხერხდა. სცადეთ ხელახლა.");
+});
+
+socket.on("randomChat:sessionInUse", () => {
+  _resetSaveBtn();
+  nameTakeoverRequested = false;
+  showChatEntryNotice("ამ ანგარიშით ჩატი უკვე გახსნილია სხვა ჩანართში.", "აქ გაგრძელება", () => saveName(true));
+});
+
+socket.on("randomChat:sessionMoved", () => {
+  isFirstLogin = true;
+  isReconnecting = false;
+  userName = "";
+  partnerConnected = false;
+  partnerName = "";
+  lastPartnerName = "";
+  canBlockDisconnected = false;
+  partnerCardData = null;
+  nextBtn.disabled = true;
+  setPartnerNameDisplay("");
+  setInputsEnabled(false);
+  updateBlockBtn();
+  stopSearchRetry();
+  dropPending(false);
+  hideTypingIndicator();
+  closeGifPickerPanel();
+  clearReply();
+  document.getElementById("searchingMsg")?.remove();
+  removeReconnectingMessage();
+  showChatEntryNotice("ჩატი სხვა ჩანართში გადავიდა.", "გვერდის განახლება", () => window.location.reload());
 });
 
 // Name refused because it contains a banned word. Distinct from nameTaken:
@@ -1639,9 +1709,8 @@ socket.on("nameRejected", ({ message }) => {
   saveNameBtn.textContent = isFirstLogin ? "საუბრის დაწყება" : "Save Name";
   _reconnectNameRetries = 0;
   isReconnecting = false;
-  showNameError(message || "ეს სახელი დაუშვებელია. სხვა აირჩიეთ.");
-  nameInput.focus();
-  nameInput.select();
+  showChatStartError(message || "ეს სახელი დაუშვებელია. სხვა აირჩიეთ.");
+  if (nameModal.style.display === "flex") { nameInput.focus(); nameInput.select(); }
 });
 
 socket.on("onlineCount", (count) => updateOnlineCount(count));
