@@ -2,11 +2,11 @@
    flappy-bird.js — "მფრინავი ჩიტი" (Flappy Bird) client for GAICANI
    Depends on: /socket.io/socket.io.js, an existing "gaicani_auth_token" /
    "gaicani_auth_user" pair in localStorage (same convention as auth-client.js,
-   dashboard.html, friend-chat.html), and the server-flappybird-patch.js
-   endpoints/socket events being merged into server.js.
+   dashboard.html, friend-chat.html), and the server.js
+   endpoints and socket events.
 
    NOTE ON DIFFICULTY CONSTANTS: FB_CFG below must stay numerically identical
-   to the FLAPPY_CFG block in server-flappybird-patch.js — the server uses the
+   to the FLAPPY_CFG block in server.js — the server uses the
    same speed/spacing formulas to compute the fastest a score could physically
    be reached, as its main anti-cheat check. If you retune difficulty here,
    copy the same numbers over there.
@@ -82,6 +82,9 @@
   const elCanvasBox        = $("fbCanvasBox");
   const elCanvas           = $("fbCanvas");
   const elHudScore         = $("fbHudScore");
+  const elEntryOverlay     = $("fbEntryOverlay");
+  const elPlayBtn          = $("fbPlayBtn");
+  const elAdLink           = $("fbAdLink");
   const elStartOverlay     = $("fbStartOverlay");
   const elGameOverOverlay  = $("fbGameOverOverlay");
   const elFinalScore       = $("fbFinalScore");
@@ -109,13 +112,14 @@
   /* ══════════════════════════════════════════════════════════════════
      Game state
      ══════════════════════════════════════════════════════════════════ */
-  const STATE = { IDLE: "idle", PLAYING: "playing", OVER: "over" };
-  let state = STATE.IDLE;
+  const STATE = { ENTRY: "entry", READY: "ready", PLAYING: "playing", OVER: "over" };
+  let state = STATE.ENTRY;
+  let isVip = false;
+  let adOpenedForRound = false;
   let bird, pipes, score, groundOffset, wingPhase, rafId, lastT, starsBg;
 
   let myBest = 0;
-  let sessionId = null;
-  let pendingScoreSubmit = null; // holds a score if the game ended before a session id arrived
+  let round;
 
   function makeStars() {
     const arr = [];
@@ -346,7 +350,8 @@
     state = STATE.PLAYING;
     lastT = 0;
     bird.vel = FB_CFG.FLAP_VELOCITY; // first tap doubles as the first flap
-    requestSession();
+    adOpenedForRound = false;
+    round = requestSession();
     rafId = requestAnimationFrame(loop);
   }
 
@@ -358,70 +363,84 @@
     elGameOverBest.textContent = String(myBest);
     elNewBestBadge.style.display = "none";
     showOverlay(elGameOverOverlay);
-    submitScore(score);
+    submitScore(round, score);
     return "over";
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     Start overlay + ad gate.
-
-     Players who aren't ad-exempt must press a button before EACH round,
-     which opens an ad in a new tab. It's deliberately two steps — press
-     the button (ad opens), then come back and tap to play — because the
-     ad tab takes the player away; starting the round at the same moment
-     would leave the bird falling while they're looking at the ad.
-
-     Exempt players (pro, or inside a 24h ad-free window earned by scoring
-     20+) skip the gate and just tap to start, as before.
-     ══════════════════════════════════════════════════════════════════ */
-  function renderStartOverlay() {
-    elStartOverlay.style.background = "";
-    elStartOverlay.innerHTML = `
-      <div class="fb-overlay-title">მზად ხარ?</div>
-      <div class="fb-overlay-sub">შეხებით ან <strong>Space</strong>-ით ფრინავს აფრენ. მოერიდე მილებს!</div>
-      <div class="fb-tap-hint">▲ შეეხე დასაწყებად ▲</div>
-    `;
-  }
-  renderStartOverlay();
-
-  /* ══════════════════════════════════════════════════════════════════
-     Input
-     ══════════════════════════════════════════════════════════════════ */
-  function handleFlapInput() {
-    if (state === STATE.IDLE) {
-      startPlaying();
-      return;
-    }
-    if (state === STATE.PLAYING) { bird.vel = FB_CFG.FLAP_VELOCITY; }
-  }
-  elCanvasBox.addEventListener("pointerdown", (e) => { e.preventDefault(); handleFlapInput(); });
-  window.addEventListener("keydown", (e) => {
-    if (e.code === "Space") { e.preventDefault(); handleFlapInput(); }
-  });
-
-  elRestartBtn.addEventListener("click", () => {
+  function showEntry() {
+    state = STATE.ENTRY;
+    hideOverlay(elStartOverlay);
     hideOverlay(elGameOverOverlay);
-    state = STATE.IDLE;
+    showOverlay(elEntryOverlay);
+  }
+
+  function prepareRound(adOpened = false) {
+    adOpenedForRound = adOpened;
+    state = STATE.READY;
+    hideOverlay(elEntryOverlay);
+    hideOverlay(elGameOverOverlay);
+    elAdLink.hidden = true;
     resetGame();
     drawFrame(0);
-    renderStartOverlay();
     showOverlay(elStartOverlay);
-  });
-
-  /* ══════════════════════════════════════════════════════════════════
-     Server communication
-     ══════════════════════════════════════════════════════════════════ */
-  let socket = null;
-
-  function requestSession() {
-    sessionId = null;
-    if (socket && socket.connected) socket.emit("flappy:start");
   }
 
-  function submitScore(finalScore) {
-    if (!socket || !socket.connected) { pendingScoreSubmit = finalScore; return; }
-    if (!sessionId) { pendingScoreSubmit = finalScore; return; }
-    socket.emit("flappy:submitScore", { sessionId, score: finalScore });
+  function updateVip(isPro) {
+    isVip = !!isPro;
+    window.GaicaniAds?.setVip(isVip);
+    if (isVip && state === STATE.ENTRY) prepareRound();
+    if (!isVip && state === STATE.READY && !adOpenedForRound) showEntry();
+  }
+
+  // Keep this in the click handler so the browser treats the ad as a user action.
+  function openRound() {
+    if (state !== STATE.ENTRY && state !== STATE.OVER) return;
+    if (isVip) { prepareRound(); return; }
+    if (window.GaicaniAds.openDirect()) { prepareRound(true); return; }
+    showEntry();
+    elAdLink.href = window.GaicaniAds.directUrl;
+    elAdLink.hidden = false;
+    elAdLink.focus();
+  }
+
+  elPlayBtn.addEventListener("click", openRound);
+  elRestartBtn.addEventListener("click", openRound);
+  elAdLink.addEventListener("click", () => prepareRound(true));
+
+  function handleFlapInput() {
+    if (state === STATE.READY && socket?.connected && authenticated) startPlaying();
+    else if (state === STATE.PLAYING) bird.vel = FB_CFG.FLAP_VELOCITY;
+  }
+  elCanvasBox.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button, a")) return;
+    e.preventDefault();
+    handleFlapInput();
+  });
+  window.addEventListener("keydown", (e) => {
+    if (e.code !== "Space" || e.target.closest?.("button, a")) return;
+    e.preventDefault();
+    handleFlapInput();
+  });
+
+  let socket = null;
+  let authenticated = false;
+
+  function requestSession() {
+    const connection = socket.id;
+    return new Promise(resolve => {
+      socket.timeout(10000).emit("flappy:start", (err, result) => {
+        resolve(!err && socket.id === connection ? result?.sessionId : null);
+      });
+    });
+  }
+
+  async function submitScore(session, finalScore) {
+    const sessionId = await session;
+    if (sessionId && socket?.connected) {
+      socket.emit("flappy:submitScore", { sessionId, score: finalScore });
+    } else {
+      showToast("კავშირი გაწყდა. ამ თამაშის ქულა ვერ შეინახა.");
+    }
   }
 
   /* ══════════════════════════════════════════════════════════════════
@@ -453,15 +472,7 @@
     } catch (_) { /* leaderboard is non-critical — game still works without it */ }
   }
 
-  /* ══════════════════════════════════════════════════════════════════
-     Init — auth gate, then boot the game. Registered users use their
-     saved token; anyone else gets a temporary guest identity instead of
-     being blocked — same everywhere-else-on-the-site pattern, so guests
-     can play Flappy Bird too and still show up on the leaderboard.
-     ══════════════════════════════════════════════════════════════════ */
-  // Registered accounts only — anyone else sees the registration gate. The
-  // server enforces the same rule (flappy:start rejects guests), so this is
-  // the friendly front door, not the lock.
+  // Registered accounts only. The server also checks each game session.
   function showRegisterGate() {
     if (socket) { try { socket.disconnect(); } catch (_) {} }
     elApp.classList.remove("visible");
@@ -482,9 +493,11 @@
       socket.emit("auth:token", { token });
     });
 
+    socket.on("disconnect", () => { authenticated = false; });
     socket.on("flappy:registerRequired", showRegisterGate);
+    socket.on("auth:proStatusChanged", ({ isPro }) => updateVip(isPro));
 
-    socket.on("auth:authenticated", ({ username: authedName, isGuest } = {}) => {
+    socket.on("auth:authenticated", ({ username: authedName, isGuest, isPro } = {}) => {
       // A real token never authenticates as a guest, but if it somehow did,
       // guests don't get to play — show the gate rather than the game.
       if (isGuest) { showRegisterGate(); return; }
@@ -492,8 +505,9 @@
       elTopUsername.textContent = `🔐 ${authedName || username}`;
       elLoading.style.display = "none";
       elApp.classList.add("visible");
+      authenticated = true;
+      updateVip(isPro);
       loadLeaderboardInitial();
-      requestSession();
     });
 
     socket.on("auth:invalid", () => {
@@ -502,17 +516,10 @@
       elGuestGate.classList.add("visible");
     });
 
-    socket.on("flappy:sessionStarted", ({ sessionId: sid }) => {
-      sessionId = sid;
-      if (pendingScoreSubmit !== null) {
-        const s = pendingScoreSubmit;
-        pendingScoreSubmit = null;
-        submitScore(s);
-      }
-    });
-
-    socket.on("flappy:scoreResult", ({ accepted, personalBest, isNewBest, coinsGranted, coinsPending } = {}) => {
+    socket.on("flappy:scoreResult", ({ accepted, personalBest, isNewBest, coinsGranted, coinsPending, vipGranted, isPro } = {}) => {
       if (!accepted) return; // rejected by anti-cheat — leaderboard/best simply won't move
+      updateVip(isPro);
+      if (vipGranted) showToast("👑 მიიღე VIP სტატუსი 12 საათით!", 5000);
       // 🪙 Past 30 → 10,000 coins (once a day) — the same coins as poker,
       // blackjack and the shop.
       if (coinsGranted) {

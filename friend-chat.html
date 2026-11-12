@@ -2320,8 +2320,8 @@ button, textarea, input { font-family: inherit; }
       myIsPro = !!(d && d.isPro);
       window.gaicaniAuthUser = Object.assign(window.gaicaniAuthUser || {}, {
         isPro: myIsPro,
-        adFreeUntil: Number(d && d.adFreeUntil) || 0, // 24h ad-free earned in Flappy Bird
       });
+      window.GaicaniAds?.setVip(myIsPro);
       refreshPhotoBtnVisibility();
       socket.emit("friendChat:join", { friendUsername: friendName });
       loadFriendHeader();
@@ -2357,13 +2357,9 @@ button, textarea, input { font-family: inherit; }
 
     // Pro status changed while this session is live (admin granted/revoked
     // it just now) — update immediately rather than waiting for a reconnect.
-    // Earned 24h ad-free in Flappy Bird (possibly in another tab).
-    socket.on("ads:adFreeUntil", ({ adFreeUntil }) => {
-      window.gaicaniAuthUser = Object.assign(window.gaicaniAuthUser || {}, { adFreeUntil: Number(adFreeUntil) || 0 });
-    });
-
     socket.on("auth:proStatusChanged", ({ isPro }) => {
       myIsPro = !!isPro;
+      window.GaicaniAds?.setVip(myIsPro);
       window.gaicaniAuthUser = Object.assign(window.gaicaniAuthUser || {}, { isPro: myIsPro });
       refreshPhotoBtnVisibility();
     });

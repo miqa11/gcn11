@@ -8,7 +8,7 @@
   text-align: right;
   pointer-events: none;
 }
-html[data-gaicani-ads="enabled"] .chat-ad-countdown {
+html[data-gaicani-ads="enabled"]:not([data-gaicani-vip]) .chat-ad-countdown {
   display: block;
 }
 .chat-ad-open {
@@ -30,12 +30,12 @@ html[data-gaicani-ads="enabled"] .chat-ad-countdown {
   line-height: 12px;
   min-height: 12px;
 }
-html[data-gaicani-ads="enabled"] .pc-input-row.gc-ad-composer,
-html[data-gaicani-ads="enabled"] #fc-input-bar.gc-ad-composer {
+html[data-gaicani-ads="enabled"]:not([data-gaicani-vip]) .pc-input-row.gc-ad-composer,
+html[data-gaicani-ads="enabled"]:not([data-gaicani-vip]) #fc-input-bar.gc-ad-composer {
   position: relative;
   padding-top: 24px;
 }
-html[data-gaicani-ads="enabled"] #priv-panel .pc-input-row.gc-ad-composer {
+html[data-gaicani-ads="enabled"]:not([data-gaicani-vip]) #priv-panel .pc-input-row.gc-ad-composer {
   padding-top: 24px !important;
 }
 .gc-ad-composer > .chat-ad-countdown {
@@ -44,7 +44,7 @@ html[data-gaicani-ads="enabled"] #priv-panel .pc-input-row.gc-ad-composer {
   right: max(12px, env(safe-area-inset-right));
 }
 
-html[data-gaicani-ads="enabled"] .right-side.chat-ad-toolbar {
+html[data-gaicani-ads="enabled"]:not([data-gaicani-vip]) .right-side.chat-ad-toolbar {
   position: relative;
   align-items: flex-start !important;
   min-width: min(248px, 100%);

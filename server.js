@@ -1925,7 +1925,7 @@ app.get(ROUTE.regUsers, ownerOnly, (req, res) => {
       lastIP: u.lastIP || null,
       lastIPAt: u.lastIPAt || null,
       isAdmin: !!u.isAdmin,
-      isPro: !!u.isPro,
+      isPro: isVip(u),
       isGuest: !!u.isGuest,
       nameBlocked: !!u.nameBlocked,
       isBanned: u.lastIP ? isIPBanned(u.lastIP) : false,
@@ -2005,22 +2005,9 @@ app.post(ROUTE.setPro, ownerOnly, (req, res) => {
   if (user.isGuest) return res.status(400).json({ error: "guests cannot be granted pro status" });
 
   user.isPro = pro;
-  // VIP ending: a picture that was only free for VIP goes back to the default
-  // (profile styles fall back by themselves — see effectiveTheme).
-  if (!pro && user.avatar && user.avatar !== SUPPORT_AVATAR && !avatarUnlocked(user, user.avatar)) user.avatar = DEFAULT_AVATAR;
-  saveAuthUsers();
-
-  // If they're online right now, tell their live session immediately —
-  // otherwise the star/ad-exemption/photo-button wouldn't show up until
-  // their next login, which is confusing right after an admin just did this.
-  let notified = 0;
-  const sockets = onlineRegSockets.get(lc);
-  if (sockets) {
-    for (const sid of sockets) {
-      const s = io.sockets.sockets.get(sid);
-      if (s) { s.emit("auth:proStatusChanged", { isPro: pro, avatar: user.avatar || DEFAULT_AVATAR }); notified++; }
-    }
-  }
+  delete user.flappyVipUntil;
+  scheduleFlappyVipExpiry(user);
+  const notified = updateVipStatus(user);
 
   console.log(`[ADMIN] ${pro ? "Granted" : "Revoked"} pro status for "${user.username}"`);
   res.json({ success: true, username: user.username, isPro: pro, notifiedSockets: notified });
@@ -3752,8 +3739,8 @@ io.on("connection", (socket) => {
     // just using random chat, not the dashboard), surface their pro status
     // to the STRANGER they were matched with — a guest or anonymous visitor
     // has no _regUser at all, so this naturally stays false for them.
-    const socketIsPro        = socket._regUser ? !!registeredUsers.get(socket._regUser.usernameLower)?.isPro : false;
-    const partnerSocketIsPro = partnerSocket._regUser ? !!registeredUsers.get(partnerSocket._regUser.usernameLower)?.isPro : false;
+    const socketIsPro        = socket._regUser ? isVip(registeredUsers.get(socket._regUser.usernameLower)) : false;
+    const partnerSocketIsPro = partnerSocket._regUser ? isVip(registeredUsers.get(partnerSocket._regUser.usernameLower)) : false;
 
     // Registered partners also share their avatar and profile details, so a
     // tap on their picture or name can show a profile popup. Guests have none.
@@ -3894,7 +3881,7 @@ io.on("connection", (socket) => {
     if (!to || to._isGhost) return reply({ error: "თანამოსაუბრე არ გყავს" });
     if (targetName !== undefined && targetName !== to.userName) return reply({ error: "თანამოსაუბრე შეიცვალა" });
     const acct = socket._regUser && !socket._regUser.isGuest && registeredUsers.get(socket._regUser.usernameLower);
-    if (!acct || !acct.isPro) return reply({ error: "ფოტოს გაგზავნა მხოლოდ VIP მომხმარებლებს შეუძლიათ" });
+    if (!isVip(acct)) return reply({ error: "ფოტოს გაგზავნა მხოლოდ VIP მომხმარებლებს შეუძლიათ" });
     if (to.isSupportAI) return reply({ error: "Support AI-ს ფოტოს ვერ გაუგზავნი" });
     if (socket._rcPhoto) return reply({ error: "წინა ფოტოზე პასუხს ჯერ ელოდები" });
     if (mediaRateLimited(socket, "rcPhoto", 4, 60_000)) return reply({ error: "ძალიან ხშირად აგზავნი — ცოტა დაელოდე" });
@@ -4434,7 +4421,7 @@ app.get(ROUTE.statsApi, (req, res) => {
     if (u.isGuest) continue;
     accounts++;
     if (u.lastIP) accountsPerIP.set(u.lastIP, (accountsPerIP.get(u.lastIP) || 0) + 1);
-    if (u.isPro) vip++;
+    if (isVip(u)) vip++;
     const t = Date.parse(u.createdAt || ""); if (t && t >= weekAgo) newAccounts7d++;
     friendLinks += Array.isArray(u.friends) ? u.friends.length : 0;
     const pr = u.profile || {};
@@ -4501,7 +4488,11 @@ app.get(ROUTE.statsTopUsers, ownerOnly, (req, res) => {
       ms: a.ms || 0, visits: a.visits || 0, days: a.days || 0, lastAt: a.lastAt || null });
   }
   const top = (k) => rows.slice().sort((x, y) => y[k] - x[k] || y.ms - x.ms).slice(0, 20);
-  res.json({ users: [...new Set([...top("ms"), ...top("visits"), ...top("days")])], counted: rows.length, since: stats.resetAt || null });
+  const vipUsers = [...registeredUsers.values()].filter(isVip)
+    .map(u => ({ username: u.username, vipUntil: flappyVipUntil(u) }))
+    .sort((a, b) => a.vipUntil - b.vipUntil || a.username.localeCompare(b.username));
+  res.json({ users: [...new Set([...top("ms"), ...top("visits"), ...top("days")])], counted: rows.length,
+    since: stats.resetAt || null, vipUsers, flappyTop30: getFlappyLeaderboard(30) });
 });
 
 app.post(ROUTE.statsReset, ownerOnly, (req, res) => {
@@ -4627,7 +4618,11 @@ footer { color:var(--muted); font-size:.76em; margin-top:28px; line-height:1.6; 
   ${TOP ? `<h2>🏆 Most active members</h2>
   <p class="note" id="topNote">Registered accounts that spend the most time on the site and come back the most. Only you see this list (admin login).</p>
   <div class="card"><div class="top-tabs" id="topTabs"><button type="button" data-k="ms" class="on">⏱ Time on site</button><button type="button" data-k="visits">🔁 Visits</button><button type="button" data-k="days">📅 Days active</button></div>
-    <div class="tbl-wrap"><table id="topTable"></table></div></div>` : ""}
+    <div class="tbl-wrap"><table id="topTable"></table></div></div>
+  <div class="grid2">
+    <div class="card"><h3>👑 VIP members</h3><div class="tbl-wrap"><table id="vipTable"></table></div></div>
+    <div class="card"><h3>🐤 Flappy Bird top 30</h3><div class="tbl-wrap"><table id="flappyTable"></table></div></div>
+  </div>` : ""}
 
   <h2>Visitors per day</h2>
   <p class="note">Last 14 days (Tbilisi time). New = first visit ever; returning = seen before.</p>
@@ -4669,7 +4664,7 @@ footer { color:var(--muted); font-size:.76em; margin-top:28px; line-height:1.6; 
   <h2>Day by day</h2>
   <div class="card"><div class="tbl-wrap"><table id="table"></table></div></div>
 
-  <footer>${TOP ? "Everyone else sees totals only — the most active members list is shown only to you (admin login)." : "Totals only: this page never shows names, messages or IP addresses."}<br>Refreshes automatically every 30 seconds.</footer>
+  <footer>${TOP ? "Member lists are visible only to the signed-in admin." : "Totals only: this page never shows names, messages or IP addresses."}<br>Refreshes automatically every 30 seconds.</footer>
 </div>
 <script>
 var API = "${API}";
@@ -4822,11 +4817,28 @@ function renderTop() {
       '</td><td>' + (u.online ? '<span class="on-now">🟢 online now</span>' : u.lastAt ? when(new Date(u.lastAt).toISOString()) : "–") + '</td></tr>';
   }).join("");
 }
+function renderMemberLists() {
+  var vip = topData.vipUsers || [];
+  $("vipTable").innerHTML = vip.length ?
+    "<tr><th>Member</th><th>VIP ends (Tbilisi)</th></tr>" + vip.map(function (u) {
+      return "<tr><td>" + esc(u.username) + "</td><td>" + (u.vipUntil ? esc(when(u.vipUntil)) : "Permanent") + "</td></tr>";
+    }).join("") : '<tr><td class="empty">No active VIP members.</td></tr>';
+  var scores = topData.flappyTop30 || [];
+  $("flappyTable").innerHTML = scores.length ?
+    "<tr><th>#</th><th>Player</th><th>Best score</th><th>Set on (Tbilisi)</th></tr>" + scores.map(function (u, i) {
+      return "<tr><td>" + (i + 1) + "</td><td>" + esc(u.username) + "</td><td>" + fmt(u.score) + "</td><td>" + esc(when(u.achievedAt) || "–") + "</td></tr>";
+    }).join("") : '<tr><td class="empty">No scores yet.</td></tr>';
+}
 function loadTop() {
   if (!TOP) return;
   fetch(TOP, { cache: "no-store", credentials: "same-origin" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
-    .then(function (d) { topData = d; renderTop(); })
-    .catch(function () { if (!topData) $("topTable").innerHTML = '<tr><td class="empty">Could not load — log in to the admin panel in this browser.</td></tr>'; });
+    .then(function (d) { topData = d; renderTop(); renderMemberLists(); })
+    .catch(function () {
+      if (topData) return;
+      ["topTable", "vipTable", "flappyTable"].forEach(function (id) {
+        $(id).innerHTML = '<tr><td class="empty">Could not load — log in to the admin panel in this browser.</td></tr>';
+      });
+    });
 }
 if ($("topTabs")) $("topTabs").addEventListener("click", function (e) {
   var b = e.target.closest("button"); if (!b) return;
@@ -5020,7 +5032,35 @@ const SHOP_AVATARS = { "avatar29.jpg": 5000, "avatar30.jpg": 10000, "avatar31.jp
 const THEME_PRICE = 5000;
 // 👑 VIP members get every picture and profile style for free (for as long
 // as they're VIP), plus the crown picture that only VIPs can wear.
-const isVip = (u) => !!(u && u.isPro && !u.isGuest);
+const flappyVipUntil = (u) => u && !u.isGuest && !u.isPro && u.flappyVipUntil > Date.now() ? u.flappyVipUntil : 0;
+const isVip = (u) => !!(u && !u.isGuest && (u.isPro || flappyVipUntil(u)));
+const flappyVipTimers = new Map();
+
+function updateVipStatus(user) {
+  if (user.avatar && user.avatar !== SUPPORT_AVATAR && !avatarUnlocked(user, user.avatar)) user.avatar = DEFAULT_AVATAR;
+  saveAuthUsers();
+  const sockets = onlineRegSockets.get(user.username.toLowerCase());
+  if (!sockets?.size) return 0;
+  io.to([...sockets]).emit("auth:proStatusChanged", {
+    isPro: isVip(user), vipUntil: flappyVipUntil(user), avatar: user.avatar || DEFAULT_AVATAR,
+  });
+  return sockets.size;
+}
+
+function scheduleFlappyVipExpiry(user) {
+  clearTimeout(flappyVipTimers.get(user));
+  flappyVipTimers.delete(user);
+  const until = flappyVipUntil(user);
+  if (!until) return;
+  const timer = setTimeout(() => {
+    flappyVipTimers.delete(user);
+    if (registeredUsers.get(user.username.toLowerCase()) !== user) return;
+    if (flappyVipUntil(user)) { scheduleFlappyVipExpiry(user); return; }
+    delete user.flappyVipUntil;
+    updateVipStatus(user);
+  }, Math.max(1, until - Date.now())).unref();
+  flappyVipTimers.set(user, timer);
+}
 const VIP_AVATAR = "avatar-vip.jpg";
 function avatarUnlocked(u, file) {
   if (file === VIP_AVATAR) return isVip(u);
@@ -5291,7 +5331,7 @@ function flappyMinTimeMs(score) {
 function flappyGenSessionId() {
   return `fb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
-function getFlappyTop3() {
+function getFlappyLeaderboard(limit) {
   const rows = [];
   for (const [lc, u] of registeredUsers) {
     if (u.isGuest) continue; // recycled temporary names — never on the podium
@@ -5300,10 +5340,10 @@ function getFlappyTop3() {
     }
   }
   rows.sort((a, b) => b.score - a.score);
-  return rows.slice(0, 3);
+  return rows.slice(0, limit);
 }
 function broadcastFlappyLeaderboard() {
-  io.emit("flappy:leaderboardUpdate", getFlappyTop3());
+  io.emit("flappy:leaderboardUpdate", getFlappyLeaderboard(3));
 }
 
 // ── Chess / Checkers "all-time top 3 by wins" leaderboards — same shape as
@@ -5436,7 +5476,7 @@ function trinderBlocked(a, aLc, b, bLc) {
 }
 function trinderCard(lc, u) {
   const p = u.trinder.profile || {};
-  return { username: u.username, avatar: u.avatar || DEFAULT_AVATAR, isPro: !!u.isPro, online: isVisiblyOnline(lc), ...p };
+  return { username: u.username, avatar: u.avatar || DEFAULT_AVATAR, isPro: isVip(u), online: isVisiblyOnline(lc), ...p };
 }
 // People who liked me and are still waiting for my answer
 function trinderPendingLikers(meLc, me) {
@@ -5479,7 +5519,7 @@ function trinderState(meLc, me) {
     .filter(([lc, u]) => u && !u.isGuest && (me.friends || []).includes(lc) && !trinderBlocked(me, meLc, u, lc))
     .map(([lc, u]) => ({ username: u.username, name: (u.trinder && u.trinder.profile && u.trinder.profile.name) || u.username, avatar: u.avatar || DEFAULT_AVATAR, online: isVisiblyOnline(lc) }));
   const pr = me.profile || {};
-  return { ...trinderLikeInfo(t, me), joined: !!t.active, complete: trinderProfileComplete(t.profile), profile: t.profile, avatar: me.avatar || DEFAULT_AVATAR, isPro: !!me.isPro,
+  return { ...trinderLikeInfo(t, me), joined: !!t.active, complete: trinderProfileComplete(t.profile), profile: t.profile, avatar: me.avatar || DEFAULT_AVATAR, isPro: isVip(me),
     likesCount: trinderPendingLikers(meLc, me).length, matches,
     prefill: { age: pr.age || null, gender: pr.gender || "", city: pr.city || "", job: pr.work || "", university: pr.study || "" } };
 }
@@ -5631,11 +5671,9 @@ function publicProfileOf(u) {
   return { age: p.age || null, gender: p.gender || "", city: p.city || "", study: p.study || "", work: p.work || "" };
 }
 
-// ── Flappy Bird ad-free reward ───────────────────────────────────────────
-// A registered user who reaches this score (validated by the existing
-// flappy anti-cheat) gets this long without ads, site-wide.
-const FLAPPY_ADFREE_SCORE = 20;
-const FLAPPY_ADFREE_MS    = 24 * 60 * 60 * 1000;
+// Flappy Bird rewards
+const FLAPPY_VIP_SCORE    = 40;
+const FLAPPY_VIP_MS       = 12 * 60 * 60 * 1000;
 // Going past this score earns coins (poker + blackjack), once a Georgian day.
 const FLAPPY_COIN_SCORE   = 30;
 const FLAPPY_COIN_REWARD  = 10000;
@@ -5747,7 +5785,7 @@ function getOnlineRegisteredUsers(excludeLc) {
     const u = registeredUsers.get(lc);
     if (!u) continue;
     if (u.appearOffline || u.nameBlocked) continue; // chose to appear offline, or name-blocked
-    list.push({ username: u.username, avatar: u.avatar || null, bio: u.bio || "", isGuest: !!u.isGuest, isPro: !!u.isPro });
+    list.push({ username: u.username, avatar: u.avatar || null, bio: u.bio || "", isGuest: !!u.isGuest, isPro: isVip(u) });
   }
   // Real accounts first, temporary guests after — within each group, alphabetical.
   list.sort((a, b) => (a.isGuest === b.isGuest ? a.username.localeCompare(b.username) : (a.isGuest ? 1 : -1)));
@@ -6026,7 +6064,7 @@ function scheduleSave() {
 //
 // This used to be a hand-written list of fields to save, and every new
 // feature had to remember to add itself to it. About ten didn't — VIP
-// status (isPro), the Flappy Bird ad-free reward, permanent block lists,
+// status (isPro), the Flappy Bird VIP reward, permanent block lists,
 // the Flappy/chess/checkers leaderboards, blackjack coins, last-known IPs
 // and unread markers were all silently WIPED on every server restart (every
 // deploy, every free-tier sleep). Saving by default means a new field
@@ -6109,6 +6147,7 @@ function loadAuthUsers() {
       if (Array.isArray(u.pendingRequests) && Array.isArray(u.friends)) u.pendingRequests = u.pendingRequests.filter(x => !u.friends.includes(x));
       registeredUsers.set(u.username.toLowerCase(), u);
       authReservedNames.add(u.username.toLowerCase());
+      scheduleFlappyVipExpiry(u);
     }
     console.log(`[AUTH] Loaded ${registeredUsers.size} registered user(s)`);
   } catch { /* first run */ }
@@ -6416,7 +6455,7 @@ app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), asyn
 
 // GET /api/flappy/leaderboard — public, no auth: anyone can see the top 3.
 app.get("/api/flappy/leaderboard", (req, res) => {
-  res.json({ top3: getFlappyTop3() });
+  res.json({ top3: getFlappyLeaderboard(3) });
 });
 
 // GET /api/chess/leaderboard, /api/checkers/leaderboard — same idea, public.
@@ -6620,8 +6659,8 @@ app.post("/api/auth/verify", express.json({ limit: "1kb" }), (req, res) => {
     avatar: user.avatar || DEFAULT_AVATAR,
     bio: user.bio || "",
     isAdmin: !!user.isAdmin,
-    isPro: !!user.isPro,
-    adFreeUntil: user.adFreeUntil || 0,
+    isPro: isVip(user),
+    vipUntil: flappyVipUntil(user),
     appearOffline: !!user.appearOffline,
     nameBlocked: !!user.nameBlocked
   });
@@ -6698,7 +6737,7 @@ app.get("/api/users/profile", (req, res) => {
     bio: u.bio || "",
     isOnline,
     isGuest: !!u.isGuest,
-    isPro: !!u.isPro,
+    isPro: isVip(u),
     profile: publicProfileOf(u),
     relation: friendRelation(auth.usernameLower, auth.user, lc, u),
     // Friends (and you) see the 24h status and when they were last online.
@@ -8207,7 +8246,7 @@ function drawRoomScores(room) {
 // currently a part of, host or not. Used to enforce one active room per
 // user: someone already playing (or hosting) elsewhere can't spin up a
 // second room via drawGuess:invite. A full scan is fine at this app's
-// scale — same reasoning as getFlappyTop3 above.
+// scale — same reasoning as the Flappy leaderboard above.
 function findActiveDrawRoomForUser(lc) {
   for (const room of drawRooms.values()) {
     if (room.status === "ended") continue;
@@ -10586,7 +10625,7 @@ function friendDetails(me) {
     if (!u || u.isGuest) return null;
     const online = isVisiblyOnline(lc), st = activeStatus(u);
     return {
-      lc, username: u.username, avatar: u.avatar || DEFAULT_AVATAR, isPro: !!u.isPro,
+      lc, username: u.username, avatar: u.avatar || DEFAULT_AVATAR, isPro: isVip(u),
       online, lastSeenAt: online || u.appearOffline ? null : (u.lastSeenAt || null),
       status: st ? st.text : "", statusAt: st ? st.at : null,
       nickname: nick[lc] || "", pinned: pins.includes(lc), theme: effectiveTheme(u),
@@ -11099,7 +11138,7 @@ io.on("connection", (socket) => {
     recordUserOnline(entry.usernameLower);
 
     socket.join(`user:${entry.usernameLower}`);
-    socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: pendingNames(user), avatar: user.avatar || DEFAULT_AVATAR, bio: user.bio || "", streaks: getStreaksForFriends(entry.usernameLower, user.friends || []), isAdmin: !!user.isAdmin, isPro: !!user.isPro, adFreeUntil: user.adFreeUntil || 0, appearOffline: !!user.appearOffline, blockedUsers: user.blockedUsers || [] });
+    socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: pendingNames(user), avatar: user.avatar || DEFAULT_AVATAR, bio: user.bio || "", streaks: getStreaksForFriends(entry.usernameLower, user.friends || []), isAdmin: !!user.isAdmin, isPro: isVip(user), vipUntil: flappyVipUntil(user), appearOffline: !!user.appearOffline, blockedUsers: user.blockedUsers || [] });
     console.log(`[AUTH] ${user.username} logged in`);
     announceOnlineChanged(); // let dashboards know the online list may have changed
   });
@@ -11186,7 +11225,7 @@ io.on("connection", (socket) => {
     onlineRegSockets.get(entry.usernameLower).add(socket.id);
     recordUserOnline(entry.usernameLower);
     socket.join(`user:${entry.usernameLower}`);
-    socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: pendingNames(user), avatar: user.avatar || DEFAULT_AVATAR, bio: user.bio || "", streaks: getStreaksForFriends(entry.usernameLower, user.friends || []), isAdmin: !!user.isAdmin, isPro: !!user.isPro, adFreeUntil: user.adFreeUntil || 0, appearOffline: !!user.appearOffline, blockedUsers: user.blockedUsers || [] });
+    socket.emit("auth:authenticated", { username: user.username, friends: user.friends || [], pendingRequests: pendingNames(user), avatar: user.avatar || DEFAULT_AVATAR, bio: user.bio || "", streaks: getStreaksForFriends(entry.usernameLower, user.friends || []), isAdmin: !!user.isAdmin, isPro: isVip(user), vipUntil: flappyVipUntil(user), appearOffline: !!user.appearOffline, blockedUsers: user.blockedUsers || [] });
     console.log(`[AUTH] ${user.username} logged in via auth:token`);
     announceOnlineChanged(); // let dashboards know the online list may have changed
   });
@@ -11541,8 +11580,9 @@ io.on("connection", (socket) => {
     const me = trMe(); if (!me) return ack({ error: "registered-only" });
     const likers = trinderPendingLikers(trLc(), me);
     markNotificationsRead(trLc(), it => it.type === "trinder_like");
-    ack({ count: likers.length, revealed: !!me.isPro,
-      items: likers.slice(0, 60).map(([lc, u]) => me.isPro ? trinderCard(lc, u) : { avatar: u.avatar || DEFAULT_AVATAR }) });
+    const vip = isVip(me);
+    ack({ count: likers.length, revealed: vip,
+      items: likers.slice(0, 60).map(([lc, u]) => vip ? trinderCard(lc, u) : { avatar: u.avatar || DEFAULT_AVATAR }) });
   });
   socket.on("trinder:resetPasses", (_d, ack) => {
     if (typeof ack !== "function") return;
@@ -11579,7 +11619,7 @@ io.on("connection", (socket) => {
   // so checking for _regUser alone let them through. Enforced here on the
   // server, not just hidden in the page, so a guest can't start a session
   // by sending the event directly.
-  socket.on("flappy:start", () => {
+  socket.on("flappy:start", (ack) => {
     if (!socket._regUser || socket._regUser.isGuest) {
       socket.emit("flappy:registerRequired");
       return;
@@ -11592,7 +11632,8 @@ io.on("connection", (socket) => {
       startAt: Date.now(),
       submitted: false,
     });
-    socket.emit("flappy:sessionStarted", { sessionId });
+    if (typeof ack === "function") ack({ sessionId });
+    else socket.emit("flappy:sessionStarted", { sessionId });
   });
 
   // ── flappy:submitScore — validate + record a finished game's score ───────
@@ -11603,7 +11644,7 @@ io.on("connection", (socket) => {
     if (!Number.isFinite(numScore) || !Number.isInteger(numScore) || numScore < 0) return;
 
     const session = flappySessions.get(sessionId);
-    if (!session || session.usernameLower !== socket._regUser.usernameLower) {
+    if (!session || session.socketId !== socket.id || session.usernameLower !== socket._regUser.usernameLower) {
       socket.emit("flappy:scoreResult", { accepted: false, reason: "invalid_session" });
       return;
     }
@@ -11645,20 +11686,12 @@ io.on("connection", (socket) => {
       saveAuthUsers();
     }
 
-    // ── Reward: 24h without ads for reaching the target score ─────────────
-    // Sits AFTER every anti-cheat check above (session token, one submit per
-    // game, rate limit, and the minimum-plausible-time check), so a score
-    // only earns this if it already passed as a real game. Registered
-    // accounts only — guests can play, but the reward belongs to an account.
-    // Re-reaching 20 while already ad-free restarts the full 24h from now.
-    let adFreeGranted = false;
-    if (numScore >= FLAPPY_ADFREE_SCORE && !socket._regUser.isGuest && !user.isGuest) {
-      user.adFreeUntil = Date.now() + FLAPPY_ADFREE_MS;
-      saveAuthUsers();
-      adFreeGranted = true;
-      console.log(`[FLAPPY] ${user.username} scored ${numScore} — ads off until ${new Date(user.adFreeUntil).toISOString()}`);
-      // Every open tab of theirs drops ads immediately, not just this one.
-      io.to(`user:${socket._regUser.usernameLower}`).emit("ads:adFreeUntil", { adFreeUntil: user.adFreeUntil });
+    // Only accepted rounds can grant or renew temporary VIP.
+    const vipGranted = numScore >= FLAPPY_VIP_SCORE && !user.isPro && !user.isGuest;
+    if (vipGranted) {
+      user.flappyVipUntil = Date.now() + FLAPPY_VIP_MS;
+      scheduleFlappyVipExpiry(user);
+      updateVipStatus(user);
     }
 
     // ── Reward: 10,000 coins for going past 30, once a day ─────────────────
@@ -11677,14 +11710,13 @@ io.on("connection", (socket) => {
       score: numScore,
       personalBest: user.flappyHighScore || 0,
       isNewBest,
-      adFreeGranted,
-      adFreeUntil: user.adFreeUntil || 0,
+      isPro: isVip(user), vipGranted, vipUntil: flappyVipUntil(user),
       coinsGranted, coinsPending,
       coinRewardToday: user.flappyCoinDay === georgiaDay(),
     });
 
     if (isNewBest) {
-      const top3 = getFlappyTop3();
+      const top3 = getFlappyLeaderboard(3);
       if (top3.some(r => r.id === socket._regUser.usernameLower)) {
         broadcastFlappyLeaderboard();
       }
@@ -12045,7 +12077,7 @@ io.on("connection", (socket) => {
 
     const myLc = socket._regUser.usernameLower;
     const myUser = registeredUsers.get(myLc);
-    if (!myUser?.isPro) {
+    if (!isVip(myUser)) {
       socket.emit("privateMsg:photoSent", { success: false, messageId, error: "ფოტოს გაგზავნა მხოლოდ VIP მომხმარებლებს შეუძლიათ" });
       return;
     }

@@ -169,6 +169,7 @@
       vertical-align: middle; letter-spacing: 0.02em;
       box-shadow: 0 2px 6px rgba(242,201,76,0.35);
     }
+    .vip-countdown { margin-top: 4px; color: var(--gold, #f2c94c); font-size: .78em; font-weight: 700; font-variant-numeric: tabular-nums; }
     .user-meta {
       font-size: 0.78em; color: var(--muted); margin-top: 4px;
       display: flex; align-items: center; gap: 5px;
@@ -1569,6 +1570,7 @@ body.guest-mode .profile-actions { display: none; }
       <div class="user-info">
         <div class="user-name" id="userName">—</div>
         <div class="user-meta" id="userMeta">რეგისტრირებული მომხმარებელი</div>
+        <div class="vip-countdown" id="vipCountdown" hidden></div>
         <div class="user-bio-display" id="userBioDisplay" style="display:none"></div>
         <button type="button" class="streak-chip" id="dailyStreakChip" hidden></button>
         <button type="button" class="coin-chip" id="coinChip" hidden title="შენი მონეტები — პოკერი, ბლექჯეკი და მაღაზია">🪙 <span id="coinChipN">—</span></button>
@@ -2477,7 +2479,8 @@ body.guest-mode .profile-actions { display: none; }
        live socket auth:authenticated event) since whichever resolves first
        shouldn't leave the other one stale — and again from
        auth:proStatusChanged if an admin grants/revokes it mid-session. */
-    function renderVipBadge(isPro) {
+    let vipCountdownTimer;
+    function renderVipBadge(isPro, vipUntil) {
       const nameEl = document.getElementById("userName");
       if (!nameEl) return;
       let badge = document.getElementById("vipBadge");
@@ -2492,6 +2495,22 @@ body.guest-mode .profile-actions { display: none; }
       } else if (badge) {
         badge.remove();
       }
+
+      const countdown = document.getElementById("vipCountdown");
+      clearTimeout(vipCountdownTimer);
+      function tick() {
+        const ms = vipUntil - Date.now();
+        countdown.hidden = !isPro || !(ms > 0);
+        if (countdown.hidden) {
+          if (isPro && vipUntil) badge?.remove();
+          return;
+        }
+        const seconds = Math.ceil(ms / 1000);
+        const parts = [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60];
+        countdown.textContent = "👑 VIP დარჩა " + parts.map(n => String(n).padStart(2, "0")).join(":");
+        vipCountdownTimer = setTimeout(tick, ms % 1000 || 1000);
+      }
+      tick();
     }
 
     function enterGuestMode() {
@@ -2780,7 +2799,7 @@ function profileChipsHTML(p) {
         }
       });
 
-      socket.on("auth:authenticated", ({ username, friends, pendingRequests, avatar, bio, streaks, isGuest, guestToken, isPro, appearOffline, blockedUsers: serverBlockedUsers }) => {
+      socket.on("auth:authenticated", ({ username, friends, pendingRequests, avatar, bio, streaks, isGuest, guestToken, isPro, vipUntil, appearOffline, blockedUsers: serverBlockedUsers }) => {
         document.getElementById("dashboardLogo").href = isGuest ? "/?welcome=1" : "/dashboard.html";
         applyPrivacyState({ appearOffline });
         if (isGuest) {
@@ -2809,7 +2828,8 @@ function profileChipsHTML(p) {
           authUser.bio = bio || "";
           authUser.isPro = !!isPro;
         }
-        renderVipBadge(!!isPro);
+        window.GaicaniAds?.setVip(isPro);
+        renderVipBadge(!!isPro, vipUntil);
         blockedUsers = new Set(serverBlockedUsers || []);
         if (typeof window._bindReportListener === "function") window._bindReportListener(socket);
         friendStreaks = streaks || {};
@@ -2835,11 +2855,12 @@ function profileChipsHTML(p) {
       // 🎁 Coins gifted by the admin (or changed elsewhere) — the counter follows.
       socket.on("coins:changed", ({ coins } = {}) => paintCoins(coins));
 
-      socket.on("auth:proStatusChanged", ({ isPro, avatar }) => {
+      socket.on("auth:proStatusChanged", ({ isPro, vipUntil, avatar }) => {
         if (authUser) authUser.isPro = !!isPro;
         // VIP ended: a picture that was only free for VIP went back to the default
         if (authUser && avatar && avatar !== authUser.avatar) { authUser.avatar = avatar; paintUserAvatar(); }
-        renderVipBadge(!!isPro);
+        window.GaicaniAds?.setVip(isPro);
+        renderVipBadge(!!isPro, vipUntil);
         loadMyTheme(); // a VIP style only shows while you're VIP
       });
 
@@ -4200,8 +4221,10 @@ function profileChipsHTML(p) {
           avatar: d.avatar || AVAILABLE_AVATARS[0],
           bio: d.bio || "",
           isPro: !!d.isPro,
+          vipUntil: d.vipUntil,
           isAdmin: !!d.isAdmin,
         };
+        window.GaicaniAds?.setVip(d.isPro);
         paintCoins(d.coins);
       } catch (_) {
         // Network error — best-effort: show page with stored username, no friend data yet
@@ -4215,7 +4238,7 @@ function profileChipsHTML(p) {
       paintUserBio();
       if (nameEl)    nameEl.textContent   = authUser.username;
       if (topUserEl) topUserEl.textContent = `🔐 ${authUser.username}`;
-      renderVipBadge(!!authUser.isPro);
+      renderVipBadge(!!authUser.isPro, authUser.vipUntil);
 
       renderFriends(authUser.friends);
       renderBlocked();

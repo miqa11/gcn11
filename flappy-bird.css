@@ -278,6 +278,7 @@ button, a, [role="button"] { touch-action: manipulation; }
   box-shadow: 0 3px 14px rgba(88,101,242,0.4);
   transition: filter 0.15s, transform 0.1s;
 }
+.fb-ad-link { color: var(--fb-gold); font-size: .9em; font-weight: 700; }
 .fb-restart-btn:hover  { filter: brightness(1.12); }
 .fb-restart-btn:active { transform: scale(0.96); }
 
