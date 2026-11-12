@@ -55,9 +55,9 @@
   function saveAuth(token, username) {
     try { localStorage.setItem(LS_TOKEN, token); localStorage.setItem(LS_USER, username); } catch (_) {}
   }
-  function loadAuth() {
-    try { return { token: localStorage.getItem(LS_TOKEN), username: localStorage.getItem(LS_USER) }; }
-    catch (_) { return {}; }
+  function loadAuthToken() {
+    try { return localStorage.getItem(LS_TOKEN); }
+    catch (_) { return null; }
   }
   function clearAuth() {
     try { localStorage.removeItem(LS_TOKEN); localStorage.removeItem(LS_USER); } catch (_) {}
@@ -103,6 +103,7 @@
   }
 
   /* ── State ───────────────────────────────────────────────────────── */
+  let storedAuthToken = null;
   let authUser = null;    // { username, token, friends:[], pendingRequests:[], avatar }
   let authSocket = null;  // reference to the main socket
   let sessionBlocked = new Set();  // lowercase usernames blocked this session
@@ -345,8 +346,9 @@
     // invites can be sent AND received through this same socket (the one
     // random chat itself runs on) regardless of registration status.
     function sendAuthToken() {
-      if (authUser) {
-        s.emit("auth:login", { token: authUser.token });
+      const token = authUser?.token || storedAuthToken;
+      if (token) {
+        s.emit("auth:login", { token });
       } else {
         let preferredUsername = null;
         try { preferredUsername = sessionStorage.getItem("gaicani_guest_username"); } catch (_) {}
@@ -354,28 +356,29 @@
       }
     }
 
-    if (s.connected) sendAuthToken();
     s.on("connect", sendAuthToken);
 
     // Authentication confirmed
-    s.on("auth:authenticated", ({ username, friends, pendingRequests, isGuest, isPro }) => {
+    s.on("auth:authenticated", ({ username, friends, pendingRequests, avatar, isGuest, isPro }) => {
       if (isGuest) {
         // Guests have no friends/pending requests to populate — just
         // remember the assigned name so it's reused on the next page.
         if (username) { try { sessionStorage.setItem("gaicani_guest_username", username); } catch (_) {} }
         return;
       }
-      if (authUser) {
-        authUser.friends = friends || [];
-        authUser.pendingRequests = pendingRequests || [];
-        authUser.isPro = !!isPro;
-        window.gaicaniAuthUser = authUser;
-      }
+      const token = authUser?.token || storedAuthToken;
+      if (!token || !username) return;
+      authUser = { username, token, friends: friends || [], pendingRequests: pendingRequests || [],
+                   avatar: avatar || AVAILABLE_AVATARS[0], isPro: !!isPro };
+      saveAuth(token, username);
+      window.gaicaniAuthUser = authUser;
+      updateAuthBadge();
+      updateRegMenuVisibility();
       window.GaicaniAds?.setVip(isPro);
-      renderDashFriends(friends || []);
-      if (authUser && !userName) {
-        $("nameInput").value = username || authUser.username;
-        $("saveNameBtn").click();
+      renderDashFriends(authUser.friends);
+      if (!userName && !$("saveNameBtn").disabled && !$("randomChatEntryNotice")) {
+        $("nameModal").style.display = "none";
+        saveName();
       }
     });
 
@@ -387,15 +390,18 @@
       }
     });
 
-    // Token expired
     s.on("auth:error", () => {
+      if (!storedAuthToken && !authUser) return;
       clearAuth();
+      storedAuthToken = null;
       authUser = null;
       window.gaicaniAuthUser = null;
       updateAuthBadge();
       updateRegMenuVisibility();
-      if (!userName) $("nameModal").style.display = "flex";
-      showToast("⚠️ სესია ამოიწურა. გთხოვთ ხელახლა შეხვიდეთ.");
+      goToWelcome();
+      activateTab("login");
+      setError("login-error", "სესია დასრულდა. გთხოვთ, ხელახლა შეხვიდეთ.");
+      sendAuthToken();
     });
 
     // ── Partner is a registered user — show banner ────────────────────
@@ -557,6 +563,7 @@
         setTimeout(() => s.emit("auth:checkPartner"), 400);
       }
     });
+    if (s.connected) sendAuthToken();
   }
 
   /* ══════════════════════════════════════════════════════════════════
@@ -1169,49 +1176,6 @@
     window.location.reload();
   });
 
-  /* ══════════════════════════════════════════════════════════════════
-     AUTO-LOGIN on page load (from localStorage)
-     ══════════════════════════════════════════════════════════════════ */
-  async function tryAutoLogin() {
-    const { token, username } = loadAuth();
-    if (!token || !username) return;
-
-    try {
-      const r = await fetch("/api/auth/verify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
-      });
-      const d = await r.json();
-      if (!d.ok && !d.success) {
-        clearAuth();
-        bindSocketEvents();
-        $("nameModal").style.display = "flex";
-        return;
-      }
-      // Restore session silently
-      authUser = {
-        username: d.username || username,
-        token,
-        friends: d.friends || [],
-        pendingRequests: d.pendingRequests || [],
-        avatar: d.avatar || AVAILABLE_AVATARS[0],
-        isPro: !!d.isPro,
-      };
-      window.gaicaniAuthUser = authUser;
-      updateAuthBadge();
-      updateRegMenuVisibility();
-      bindSocketEvents();
-    } catch (_) {
-      // Network error — restore from local storage best-effort
-      authUser = { username, token, friends: [], pendingRequests: [] };
-      window.gaicaniAuthUser = authUser;
-      updateAuthBadge();
-      updateRegMenuVisibility();
-      bindSocketEvents();
-    }
-  }
-
   /* ── Expose openDashboard globally for any external callers ──────── */
   window.openDashboard = openDashboard;
 
@@ -1221,17 +1185,8 @@
     activateTab("guest");
     updateAuthBadge();
     updateRegMenuVisibility();
-    // If there's no stored token at all, bind the guest identity right
-    // away rather than waiting on tryAutoLogin (which only runs when a
-    // token exists) — otherwise a guest's socket never gets _regUser set
-    // here, and they'd never receive or send game invites while actually
-    // on the random chat page itself (only on dashboard/game pages).
-    const { token, username } = loadAuth();
-    if (token && username) {
-      tryAutoLogin();
-    } else {
-      bindSocketEvents();
-    }
+    storedAuthToken = loadAuthToken();
+    bindSocketEvents();
   });
 
 })();

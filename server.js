@@ -3504,7 +3504,7 @@ io.on("connection", (socket) => {
   socket.on("setName", (data) => {
     evictGhostOf(socket);   // an app-switch ghost of this user must let go before we resume
     // Accept either plain string (legacy) or { name, token, powAnswer } object
-    let name, token, powAnswer, webdriver, resumeChat;
+    let name, token, powAnswer, webdriver, resumeChat, takeover;
     if (typeof data === "string") {
       name  = data;
       token = null;
@@ -3514,6 +3514,7 @@ io.on("connection", (socket) => {
       powAnswer = data.powAnswer;
       webdriver = data.webdriver; // client reports navigator.webdriver
       resumeChat = data.resumeChat === true;
+      takeover = data.takeover === true;
     } else return;
 
     // ── Hard block: client self-reported as WebDriver ──────────────────────
@@ -3593,7 +3594,7 @@ io.on("connection", (socket) => {
     }
 
     const lowerTrimmed = trimmed.toLowerCase();
-    const canResume = randomReconnect.canResume(socket, lowerTrimmed);
+    let canResume = randomReconnect.canResume(socket, lowerTrimmed);
     if (pendingDisconnects.has(lowerTrimmed) && !canResume) {
       socket.emit("nameTaken");
       return;
@@ -3605,6 +3606,7 @@ io.on("connection", (socket) => {
       }
       socket.userName = trimmed;
       socket._randomChatName = lowerTrimmed;
+      socket._randomChatTakeoverFrom = null;
       socket.emit("nameAccepted", trimmed);
       if (randomReconnect.restore(socket, lowerTrimmed)) socket.chatStartedAt = Date.now();
       else if (resumeChat && !socket.partner) socket.emit("partnerDisconnected", {});
@@ -3623,6 +3625,26 @@ io.on("connection", (socket) => {
       if (!isOwner) {
         socket.emit("nameTaken");
         return;
+      }
+      if (isRealAccount && activeUsernames.has(lowerTrimmed) && !canResume) {
+        // Only move this account’s random-chat socket. Dashboard and game sockets stay connected.
+        const sessions = onlineRegSockets.get(lowerTrimmed) || [];
+        for (const id of sessions) {
+          if (id === socket.id) continue;
+          const oldChat = io.sockets.sockets.get(id);
+          if (!oldChat?.connected || oldChat._randomChatName !== lowerTrimmed ||
+              oldChat._regUser?.isGuest || oldChat._regUser?.usernameLower !== lowerTrimmed) continue;
+          if (!takeover || socket._randomChatTakeoverFrom !== id) {
+            socket._randomChatTakeoverFrom = id;
+            socket.emit("randomChat:sessionInUse");
+            return;
+          }
+          socket._randomChatTakeoverFrom = null;
+          oldChat.emit("randomChat:sessionMoved");
+          oldChat.disconnect(true);
+          canResume = randomReconnect.canResume(socket, lowerTrimmed);
+          break;
+        }
       }
       // Owner is reclaiming — evict any anonymous socket currently holding it
       if (activeUsernames.has(lowerTrimmed) && !pendingDisconnects.has(lowerTrimmed)) {
@@ -11139,13 +11161,13 @@ io.on("connection", (socket) => {
   socket.on("auth:login", ({ token }) => {
     if (!token) return;
     const entry = authTokens.get(token);
-    if (!entry || Date.now() >= entry.expiry) {
+    if (!entry || entry.isGuest || Date.now() >= entry.expiry) {
       socket.emit("auth:error", { error: "Token expired" });
       return;
     }
 
     const user = registeredUsers.get(entry.usernameLower);
-    if (!user) return;
+    if (!user || user.isGuest) return socket.emit("auth:error", { error: "Account unavailable" });
 
     if (user.nameBlocked) { socket.emit("account:nameBlocked", { username: user.username }); return; }
     socket._regUser = { usernameLower: entry.usernameLower, username: user.username };
