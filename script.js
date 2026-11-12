@@ -1557,13 +1557,17 @@ socket.on("nameAccepted", (acceptedName) => {
 
   if (isFirstLogin) {
     isFirstLogin = false;
+    nextBtn.disabled = false;
     clearChat();
     // Do NOT auto-search — user must press the Search button manually
     addSystemMessage("🔎 ძებნის დასაწყებად დააჭირე ღილაკს");
     addFlappyVipChallenge();
     addDonationCard();
   } else if (isReconnecting) {
-    if (!partnerConnected) isReconnecting = false;
+    if (!partnerConnected) {
+      isReconnecting = false;
+      if (document.getElementById("searchingMsg")) socket.emit("findPartner");
+    }
     _reconnectNameRetries = 0; // reset retry counter on success
     removeReconnectingMessage();
     // Keep inputs and chat as-is — server follows with partnerRestored or partnerDisconnected
@@ -2100,13 +2104,14 @@ socket.on("awayTimeout", () => {});
 // ── Button handlers ───────────────────────────────────────────────────────────
 
 nextBtn.addEventListener("click", () => {
+  if (isFirstLogin) return;
   if (!socket.connected || isReconnecting) {
     if (socket.active) socket.checkConnection?.();
     return;
   }
   nextBtn.disabled = true;
   window.GaicaniChatAds?.count("search");
-  setTimeout(() => { nextBtn.disabled = false; }, 1200);
+  setTimeout(() => { nextBtn.disabled = isFirstLogin; }, 1200);
 
   // Stop any stale state synchronously first
   stopSearchRetry();
@@ -2226,6 +2231,7 @@ function goToWelcome() {
   canBlockDisconnected = false;
   userName             = "";
   isFirstLogin         = true;
+  nextBtn.disabled      = true;
   isReconnecting       = false;
   setInputsEnabled(false);
   updateBlockBtn();
@@ -2285,8 +2291,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // they still press "ძებნა" themselves for that part.
   try { sessionStorage.removeItem("gaicani_username"); } catch (_) {}
 
-  // If a saved auth token exists, auth-client.js will hide this immediately.
-  // Still show briefly for guests; auth-client suppresses for registered users.
+  // Registered accounts are submitted after the socket confirms authentication.
   const _hasToken = (() => { try { return !!localStorage.getItem("gaicani_auth_token"); } catch(_){return false;} })();
   if (!_hasToken) {
     let _existingGuestName = null;
