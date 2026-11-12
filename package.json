@@ -4,15 +4,20 @@
   "description": "Random chat app",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "postinstall": "node scripts/build-photo-check.cjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@tensorflow/tfjs": "4.22.0",
+    "buffer": "6.0.3",
     "compression": "^1.7.4",
+    "esbuild": "0.28.2",
     "express": "^5.1.0",
     "express-rate-limit": "^7.5.0",
+    "nsfwjs": "4.3.0",
     "sharp": "^0.35.4",
     "socket.io": "^4.8.1"
   }
