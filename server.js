@@ -4035,7 +4035,7 @@ io.on("connection", (socket) => {
 
   // ── Next ─────────────────────────────────────────────────────────────────
   socket.on("next", (options) => {
-    if (!socket.userName) return;
+    if (!socket._randomChatName || !socket.userName) return;
 
     if (socket.partner) {
       const oldPartner   = socket.partner;
@@ -4053,7 +4053,8 @@ io.on("connection", (socket) => {
       setTimeout(() => {
         socket.recentPartnerIds.delete(oldPartnerId);
         if (oldPartner.connected) oldPartner.recentPartnerIds.delete(socket.id);
-        // Do NOT auto-queue either side — both must press Search themselves
+        // Recheck when both people already pressed Search during the cooldown.
+        if (waitingQueue.includes(socket) && waitingQueue.includes(oldPartner)) tryFindPartner();
       }, 5000);
 
       cleanupGameForSocket(socket.id);

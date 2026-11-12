@@ -306,26 +306,6 @@
     }, 700);
   }
 
-  function autoSetNameAfterAuth(username) {
-    // Hide the name modal immediately — registered users never need to see it
-    const nameModal = document.getElementById("nameModal");
-    const overlay   = document.getElementById("modalLoadingOverlay");
-    if (nameModal) nameModal.style.display = "none";
-
-    // Used by tryAutoLogin so returning registered users skip the name modal
-    setTimeout(() => {
-      if (typeof window.socket !== "undefined" && window.socket.connected) {
-        const currentName = window.userName || "";
-        if (!currentName) {
-          const nameInput = $("nameInput");
-          if (nameInput) nameInput.value = username;
-          const saveBtn = $("saveNameBtn");
-          if (saveBtn) saveBtn.click();
-        }
-      }
-    }, 400);
-  }
-
   /* ── Update top bar badge ──────────────────────────────────────────── */
   function updateAuthBadge() {
     const badge = $("auth-user-badge");
@@ -393,6 +373,10 @@
       }
       window.GaicaniAds?.setVip(isPro);
       renderDashFriends(friends || []);
+      if (authUser && !userName) {
+        $("nameInput").value = username || authUser.username;
+        $("saveNameBtn").click();
+      }
     });
 
     s.on("auth:proStatusChanged", ({ isPro }) => {
@@ -410,6 +394,7 @@
       window.gaicaniAuthUser = null;
       updateAuthBadge();
       updateRegMenuVisibility();
+      if (!userName) $("nameModal").style.display = "flex";
       showToast("⚠️ სესია ამოიწურა. გთხოვთ ხელახლა შეხვიდეთ.");
     });
 
@@ -1200,6 +1185,8 @@
       const d = await r.json();
       if (!d.ok && !d.success) {
         clearAuth();
+        bindSocketEvents();
+        $("nameModal").style.display = "flex";
         return;
       }
       // Restore session silently
@@ -1209,13 +1196,12 @@
         friends: d.friends || [],
         pendingRequests: d.pendingRequests || [],
         avatar: d.avatar || AVAILABLE_AVATARS[0],
+        isPro: !!d.isPro,
       };
       window.gaicaniAuthUser = authUser;
       updateAuthBadge();
       updateRegMenuVisibility();
       bindSocketEvents();
-      // Auto-fill and submit name so returning users skip the name modal
-      autoSetNameAfterAuth(authUser.username);
     } catch (_) {
       // Network error — restore from local storage best-effort
       authUser = { username, token, friends: [], pendingRequests: [] };
@@ -1223,7 +1209,6 @@
       updateAuthBadge();
       updateRegMenuVisibility();
       bindSocketEvents();
-      autoSetNameAfterAuth(username);
     }
   }
 
