@@ -284,35 +284,19 @@ function addDonationCard() {
   scheduleScroll();
 }
 
-function addRegisterPromoCard() {
-  if (window.gaicaniAuthUser) return;
-
+function addFlappyVipChallenge() {
   const card = document.createElement("div");
-  card.className = "register-promo-card";
+  card.className = "flappy-vip-card";
   card.innerHTML = `
-    <div class="register-promo-title">✨ რატომ დარეგისტრირდე?</div>
-    <div class="register-promo-line">
-      <div class="rp-item"><span class="rp-ico">👤</span><div><b>დაიკავე შენი უნიკალური სახელი</b><br>შექმენი შენი username და შეინარჩუნე შენი პროფილი.</div></div>
-      <div class="rp-item"><span class="rp-ico">💘</span><div><b>Trinder — გაიცანი ახალი ადამიანები</b><br>დაათვალიერე მომხმარებლების პროფილები, მოიწონე ისინი და თუ მოწონება ორმხრივი იქნება — <b>დამეჩდით!</b> ❤️</div></div>
-      <div class="rp-item"><span class="rp-ico">👥</span><div><b>დაამატე მეგობრები</b><br>შეინახე საინტერესო ადამიანები და აღარ დაკარგო ისინი.</div></div>
-      <div class="rp-item"><span class="rp-ico">💬</span><div><b>პირადი ჩათი</b><br>ესაუბრე მეგობრებს პირადად.</div></div>
-      <div class="rp-item"><span class="rp-ico">🎵</span><div><b>მოუსმინეთ მუსიკას ერთად <i>(Limited)</i></b><br>მოუსმინე მუსიკას მეგობრებთან ერთად.</div></div>
-      <div class="rp-item"><span class="rp-ico">❤️</span><div><b>რეაქციები, სურათები და ჩათის ფონები</b><br>გახადე შენი საუბრები უფრო საინტერესო.</div></div>
-          <div class="rp-item"><span class="rp-ico">🎮</span><div><b>თამაშები</b><br>ითამაშე ონლაინ თამაშები სხვა მომხმარებლებთან.</div></div>
-      <div class="rp-item"><span class="rp-ico">🖼️</span><div><b>შექმენი შენი პროფილი</b><br>დაამატე ფოტო, „ჩემ შესახებ“ და სხვა ინფორმაცია.</div></div>
-      <div class="rp-item"><span class="rp-ico">🔥</span><div><b>აქტივობა და streak-ები</b><br>შეინარჩუნე ზედიზედ შესვლის დღეები და აჩვენე შენი აქტივობა.</div></div>
-      <hr class="rp-hr">
-      <div class="rp-cta"><b>🚀 რეგისტრაცია სულ რამდენიმე წამს გრძელდება!</b></div>
-      ✏️ მხოლოდ <b>სახელი + პაროლი</b><br>
-      📧 <b>ელფოსტა არ არის საჭირო</b><br>
-      💳 <b>მარტივი რეგისტრაცია</b>
-      <div class="rp-cta">🔥 <b>დარეგისტრირდი და აღმოაჩინე Gaicani.online-ის სრული შესაძლებლობები!</b></div>
-    </div>`;
-  card.addEventListener("click", () => {
-    const signupTab = document.getElementById("auth-tab-signup");
-    if (signupTab) signupTab.click();
-    if (nameModal) nameModal.style.display = "flex";
-  });
+    <div class="flappy-vip-title">🚨🔥 გრანდიოზული VIP გამოწვევა! 🔥🚨</div>
+    <p>🐦 ითამაშე <strong>„მფრინავი ჩიტი“</strong>, დააგროვე <strong>40 ქულა</strong> და მოიგე <strong>VIP სტატუსი 12 საათით!</strong> 👑</p>
+    <ul class="flappy-vip-perks">
+      <li>📸 ფოტოების გაგზავნა</li>
+      <li>🚫 ყველა რეკლამის სრული გათიშვა</li>
+      <li>💎 პროფილის ყველა სტილი და ავატარი უფასოდ</li>
+    </ul>
+    <p class="flappy-vip-call">🏆 გაბედე, მიაღწიე 40 ქულას და გახდი VIP! 🚀</p>
+    <a class="flappy-vip-play" href="/flappy-bird.html" target="_blank" rel="noopener">🐦 ითამაშე „მფრინავი ჩიტი“</a>`;
   chat.appendChild(card);
   scheduleScroll();
 }
@@ -1576,7 +1560,7 @@ socket.on("nameAccepted", (acceptedName) => {
     clearChat();
     // Do NOT auto-search — user must press the Search button manually
     addSystemMessage("🔎 ძებნის დასაწყებად დააჭირე ღილაკს");
-    addRegisterPromoCard();
+    addFlappyVipChallenge();
     addDonationCard();
   } else if (isReconnecting) {
     if (!partnerConnected) isReconnecting = false;
