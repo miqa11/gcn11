@@ -812,6 +812,7 @@ function recordSocketVisit(ip, userAgent) {
 }
 
 // ── Statistics tracking ───────────────────────────────────────────────────────
+const FLAPPY_STATS_VERSION = 1;
 const stats = {
   days: new Map(),        // "YYYY-MM-DD" → dayObj  (rolling 14 days)
   allTimeIPs: new Set(),
@@ -978,6 +979,7 @@ function _saveStatsToDisk() {
     serverStartedAt: stats.serverStartedAt,
     extendedSince: stats.extendedSince || null,
     resetAt: stats.resetAt || null,
+    flappyStatsVersion: stats.flappyStatsVersion,
     // accounts deleted since are left out
     users: Object.fromEntries([...stats.users].filter(([lc]) => !registeredUsers.size || registeredUsers.has(lc))),
   };
@@ -1011,6 +1013,7 @@ function loadStats() {
     }
     stats.extendedSince = obj.extendedSince || null;
     stats.resetAt = obj.resetAt || null;
+    stats.flappyStatsVersion = obj.flappyStatsVersion;
     stats.users = new Map(Object.entries(obj.users || {}));
     stats.allTimeIPs = new Set(obj.allTimeIPs || []);
     stats.peakOnline = obj.peakOnline || 0;
@@ -5672,7 +5675,7 @@ function publicProfileOf(u) {
 }
 
 // Flappy Bird rewards
-const FLAPPY_VIP_SCORE    = 40;
+const FLAPPY_VIP_SCORE    = 30;
 const FLAPPY_VIP_MS       = 12 * 60 * 60 * 1000;
 // Going past this score earns coins (poker + blackjack), once a Georgian day.
 const FLAPPY_COIN_SCORE   = 30;
@@ -6311,6 +6314,29 @@ loadPrivateMsgs();
 loadStreaks();
 loadNotifications();
 loadStats();
+
+// Clear pre-reset Flappy Bird records once while keeping new records across deploys.
+let removedFlappyScores = false;
+for (const user of registeredUsers.values()) {
+  if (user.flappyStatsVersion === FLAPPY_STATS_VERSION) continue;
+  if (!Object.hasOwn(user, "flappyHighScore") && !Object.hasOwn(user, "flappyHighScoreAt")) continue;
+  delete user.flappyHighScore;
+  delete user.flappyHighScoreAt;
+  removedFlappyScores = true;
+}
+if (removedFlappyScores) {
+  saveAuthUsers();
+  _saveAuthUsersToDisk();
+}
+if (stats.flappyStatsVersion !== FLAPPY_STATS_VERSION) {
+  for (const day of stats.days.values()) {
+    delete day.counters["game:flappy"];
+    delete day.pages["/flappy-bird.html"];
+  }
+  stats.flappyStatsVersion = FLAPPY_STATS_VERSION;
+  _saveStatsToDisk();
+  if (statsDirty) scheduleStatsSave();
+}
 // server.listen() below is deliberately deferred until this resolves — closes
 // a narrow race where someone could register the admin username themselves
 // in the brief window before the async password hash finishes.
@@ -11681,6 +11707,7 @@ io.on("connection", (socket) => {
     const prevBest  = user.flappyHighScore || 0;
     const isNewBest = numScore > prevBest;
     if (isNewBest) {
+      user.flappyStatsVersion = FLAPPY_STATS_VERSION;
       user.flappyHighScore   = numScore;
       user.flappyHighScoreAt = new Date().toISOString();
       saveAuthUsers();

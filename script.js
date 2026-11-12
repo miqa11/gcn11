@@ -289,13 +289,13 @@ function addFlappyVipChallenge() {
   card.className = "flappy-vip-card";
   card.innerHTML = `
     <div class="flappy-vip-title">🚨🔥 გრანდიოზული VIP გამოწვევა! 🔥🚨</div>
-    <p>🐦 ითამაშე <strong>„მფრინავი ჩიტი“</strong>, დააგროვე <strong>40 ქულა</strong> და მოიგე <strong>VIP სტატუსი 12 საათით!</strong> 👑</p>
+    <p>🐦 ითამაშე <strong>„მფრინავი ჩიტი“</strong>, დააგროვე <strong>30 ქულა ან მეტი</strong> და მოიგე <strong>VIP სტატუსი 12 საათით!</strong> 👑</p>
     <ul class="flappy-vip-perks">
       <li>📸 ფოტოების გაგზავნა</li>
       <li>🚫 ყველა რეკლამის სრული გათიშვა</li>
       <li>💎 პროფილის ყველა სტილი და ავატარი უფასოდ</li>
     </ul>
-    <p class="flappy-vip-call">🏆 გაბედე, მიაღწიე 40 ქულას და გახდი VIP! 🚀</p>
+    <p class="flappy-vip-call">🏆 გაბედე, მიაღწიე 30 ქულას და გახდი VIP! 🚀</p>
     <a class="flappy-vip-play" href="/flappy-bird.html" target="_blank" rel="noopener">🐦 ითამაშე „მფრინავი ჩიტი“</a>`;
   chat.appendChild(card);
   scheduleScroll();
