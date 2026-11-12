@@ -87,16 +87,26 @@
   }
 
   // ── 🔞 Nudity check on this phone (NSFWJS, MobileNetV2 — about 90% right).
-  // Loaded the first time someone opens the photo flow (~5 MB, then cached).
+  // The install builds the same-origin detector with its model bundled.
+  // Only load it when someone opens the photo flow.
   let nsfwModel = null;
   function loadScript(src) {
-    return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = src;
+      script.onload = resolve;
+      script.onerror = () => {
+        script.remove();
+        reject(new Error("Photo checker bundle could not load"));
+      };
+      document.head.appendChild(script);
+    });
   }
   function nsfwReady() {
     if (!nsfwModel) {
       nsfwModel = (async () => {
-        if (!window.nsfwjs) await loadScript("/nsfw/nsfwjs.min.js");
-        return window.nsfwjs.load("/nsfw/model/model.json");
+        if (!window.GaicaniPhotoCheck) await loadScript("/vendor/photo-check.js");
+        return window.GaicaniPhotoCheck.load();
       })();
       nsfwModel.catch(() => { nsfwModel = null; }); // a failed download can be tried again
     }
@@ -110,7 +120,8 @@
       const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url; });
       const p = {};
       for (const x of await model.classify(img)) p[x.className] = x.probability;
-      return (p.Porn || 0) + (p.Hentai || 0) >= 0.5 || (p.Sexy || 0) >= 0.85;
+      if (![p.Porn, p.Hentai, p.Sexy].every(Number.isFinite)) throw new Error("Photo checker returned incomplete results");
+      return p.Porn + p.Hentai >= 0.5 || p.Sexy >= 0.85;
     } finally { URL.revokeObjectURL(url); }
   }
   function busy(text) {
@@ -141,8 +152,14 @@
         try { blob = await shrink(file); } catch (_) { return resolve({ error: "ეს ფოტო ვერ გაიხსნა — სცადე JPG ან PNG" }); }
         const done = busy("🔍 ფოტოს ვამოწმებ…");
         let nude;
-        try { nude = await looksNude(blob); } catch (_) { nude = null; } finally { done(); }
-        if (nude === null) return resolve({ error: "ფოტოს შემოწმება ვერ მოხერხდა — შეამოწმე ინტერნეტი და სცადე თავიდან" });
+        try {
+          nude = await looksNude(blob);
+        } catch (error) {
+          console.warn("[Photo check]", error);
+          return resolve({ error: "ფოტოს უსაფრთხოების შემოწმება დროებით ვერ შესრულდა — სცადე ხელახლა" });
+        } finally {
+          done();
+        }
         if (nude) {
           await dialog({ title: "🚫 ამ ფოტოს ვერ გაგზავნი",
             text: "როგორც ჩანს, ფოტოზე შიშველი ან უხამსი შინაარსია. ასეთი ფოტოების გაგზავნა აკრძალულია.",
