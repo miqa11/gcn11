@@ -1,7 +1,6 @@
 (function () {
   "use strict";
 
-  const adUrl = "https://uplcm.com/4/11150018";
   const limits = { search: 3, block: 3, private: 5 };
   const remaining = {};
   const blocked = {};
@@ -18,7 +17,7 @@
       if (blocked[kind]) {
         const link = document.createElement("a");
         link.className = "chat-ad-open";
-        link.href = adUrl;
+        link.href = window.GaicaniAds.directUrl;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
         link.referrerPolicy = "no-referrer";
@@ -27,27 +26,6 @@
         link.title = "გახსენი რეკლამა";
         badge.append(" · ", link);
       }
-    }
-  }
-
-  function openAd() {
-    let popup;
-    try {
-      // Open synchronously during the click. Using a blank page lets us
-      // detect a blocked popup before safely navigating to the advertiser.
-      popup = window.open("about:blank", "_blank");
-      if (!popup) return false;
-      popup.opener = null;
-      const link = popup.document.createElement("a");
-      link.href = adUrl;
-      link.rel = "noreferrer";
-      link.referrerPolicy = "no-referrer";
-      popup.document.body.appendChild(link);
-      link.click();
-      return true;
-    } catch {
-      try { popup?.close(); } catch {}
-      return false;
     }
   }
 
@@ -68,7 +46,7 @@
       try { sessionStorage.setItem(storageKey(kind), String(remaining[kind])); } catch {}
       // Called directly by the user's click or send key, so browsers can
       // open the new tab without delaying the chat action.
-      if (showAd) blocked[kind] = !openAd();
+      if (showAd) blocked[kind] = !window.GaicaniAds.openDirect();
       render(kind);
     },
   };

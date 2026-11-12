@@ -378,7 +378,7 @@
     s.on("connect", sendAuthToken);
 
     // Authentication confirmed
-    s.on("auth:authenticated", ({ username, friends, pendingRequests, isGuest, isPro, adFreeUntil }) => {
+    s.on("auth:authenticated", ({ username, friends, pendingRequests, isGuest, isPro }) => {
       if (isGuest) {
         // Guests have no friends/pending requests to populate — just
         // remember the assigned name so it's reused on the next page.
@@ -389,24 +389,14 @@
         authUser.friends = friends || [];
         authUser.pendingRequests = pendingRequests || [];
         authUser.isPro = !!isPro;
-        authUser.adFreeUntil = Number(adFreeUntil) || 0; // 24h ad-free earned in Flappy Bird
         window.gaicaniAuthUser = authUser;
       }
+      window.GaicaniAds?.setVip(isPro);
       renderDashFriends(friends || []);
     });
 
-    // Earned 24h ad-free in Flappy Bird (possibly in ANOTHER tab) — drop the
-    // ad badges here immediately rather than waiting for a reload.
-    s.on("ads:adFreeUntil", ({ adFreeUntil }) => {
-      if (authUser) {
-        authUser.adFreeUntil = Number(adFreeUntil) || 0;
-        window.gaicaniAuthUser = authUser;
-      }
-    });
-
-    // Pro status changed while this session is live (admin just granted or
-    // revoked it) — update immediately rather than waiting for a reconnect.
     s.on("auth:proStatusChanged", ({ isPro }) => {
+      window.GaicaniAds?.setVip(isPro);
       if (authUser) {
         authUser.isPro = !!isPro;
         window.gaicaniAuthUser = authUser;
