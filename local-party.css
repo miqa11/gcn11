@@ -203,6 +203,8 @@ body {
 .tallies dt { color: var(--party-muted); }
 .tallies dd { margin: 0; text-align: end; font-weight: 750; }
 .alias-status { display: flex; justify-content: space-between; gap: 8px; color: var(--party-muted); }
+.deduction-clock { color: var(--party-accent); font-size: clamp(2rem, 8vw, 3.5rem); font-weight: 800; font-variant-numeric: tabular-nums; margin: 8px 0; }
+.deduction-clock[data-low] { color: #ffaeaf; }
 #alias-time { color: var(--party-accent); font-weight: 800; font-variant-numeric: tabular-nums; }
 #alias-time[data-low] { color: #ffaeaf; }
 .alias-actions { grid-template-columns: 1fr 1fr; }
