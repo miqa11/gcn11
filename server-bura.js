@@ -7,7 +7,7 @@ function createBura({io,registeredUsers,spendableCoins,changeCoins,saveAuthUsers
  const timer=(f,ms)=>{const t=setTimer(f,ms);t?.unref?.();return t;};
  const emit=(p,event,data)=>{if(p.socketId){const sk=io.sockets.sockets.get(p.socketId);if(sk?._regUser?.usernameLower===p.lc)sk.emit(event,data);}};
  const blocked=(a,b)=>{const x=registeredUsers.get(a),y=registeredUsers.get(b);return !x||!y||(x.blockedUsers||[]).includes(b)||(y.blockedUsers||[]).includes(a);};
- function balance(lc){const u=registeredUsers.get(lc);return u&&!u.isGuest?spendableCoins(u,lc):null;}
+ function balance(lc){const u=registeredUsers.get(lc);return u?spendableCoins(u,lc):null;}
  function coins(lc,delta){const u=registeredUsers.get(lc);if(u)changeCoins(u,lc,delta,{save:false});}
  function coinNotice(lc){io.to(`user:${lc}`).emit("coins:changed",{coins:balance(lc)});}
  // A process restart voids unfinished matches and returns each reserved stake once.
@@ -16,7 +16,7 @@ function createBura({io,registeredUsers,spendableCoins,changeCoins,saveAuthUsers
  if(recovered)saveAuthUsers();
  function rank(u){const w=weekKey(now());return u.buraWeekly?.week===w?{...u.buraWeekly}:{week:w,wins:0,losses:0,net:0};}
  function rankings(){return [...registeredUsers.values()].filter(u=>!u.isGuest).map(u=>({username:u.username,...rank(u)})).filter(u=>u.wins||u.losses).sort((a,b)=>b.wins-a.wins||b.net-a.net||a.losses-b.losses||a.username.localeCompare(b.username)).slice(0,50);}
- function publicRooms(){return [...rooms.values()].filter(r=>r.status==="lobby"&&!r.bot).map(r=>({roomId:r.id,hostUsername:r.players[0].username,playerCount:r.players.length,maxPlayers:2,status:r.status,stake:STAKE}));}
+ function publicRooms(){return [...rooms.values()].filter(r=>r.status==="lobby"&&!r.bot).map(r=>({roomId:r.id,hostUsername:r.players[0].username,playerCount:r.players.length,maxPlayers:2,guestTable:!!r.guestTable,status:r.status,stake:STAKE}));}
  function list(){io.emit("bura:publicRooms",publicRooms());}
  function view(r,p){return {serverNow:now(),roomId:r.id,status:r.status,version:r.version,hostUsername:r.players[0].username,bot:r.bot,stake:r.bot?0:STAKE,coins:balance(p.lc),players:r.players.map((a,seat)=>({username:a.username,avatar:a.avatar,seat,connected:a.connected,ready:a.ready,bot:!!a.bot})),mySeat:r.players.indexOf(p),game:r.game?G.viewForSeat(r.game,r.players.indexOf(p)):null,deadline:r.deadline||null,nextRoundAt:r.nextRoundAt||null,reconnectUntil:r.players.map(a=>a.reconnectUntil||null),paused:r.status==="playing"&&r.players.some(a=>!a.connected),messages:r.messages.slice(),settlement:r.settlement||null,weekly:rank(registeredUsers.get(p.lc)||{})};}
  function publish(r,{chatOnly=false}={}){
@@ -32,7 +32,7 @@ function createBura({io,registeredUsers,spendableCoins,changeCoins,saveAuthUsers
   if(!r.bot){
    const valid=r.players.every(p=>registeredUsers.get(p.lc)?.buraEscrow?.matchId===r.id&&registeredUsers.get(p.lc).buraEscrow.amount===STAKE);
    if(valid){
-    for(const [i,p] of r.players.entries()){const u=registeredUsers.get(p.lc);delete u.buraEscrow;const w=rank(u);if(i===winner){coins(p.lc,RETURN);w.wins++;w.net+=28;}else{w.losses++;w.net-=30;}u.buraWeekly=w;}
+    for(const [i,p] of r.players.entries()){const u=registeredUsers.get(p.lc);delete u.buraEscrow;if(i===winner)coins(p.lc,RETURN);if(!u.isGuest){const w=rank(u);if(i===winner){w.wins++;w.net+=28;}else{w.losses++;w.net-=30;}u.buraWeekly=w;}}
     r.settlement={winner,profit:28,loss:30,fee:2};saveAuthUsers();for(const p of r.players)coinNotice(p.lc);
    }else{
     for(const p of r.players){const u=registeredUsers.get(p.lc);if(u?.buraEscrow?.matchId===r.id){delete u.buraEscrow;coins(p.lc,STAKE);}}
@@ -69,7 +69,7 @@ function createBura({io,registeredUsers,spendableCoins,changeCoins,saveAuthUsers
   if(r.status!=="lobby"||r.players.length!==2||!r.players.every(p=>p.connected&&p.ready))return;
   if(!r.bot){
    if(blocked(r.players[0].lc,r.players[1].lc)){r.players.forEach(p=>p.ready=false);return errorRoom(r,"დაბლოკილ მოთამაშესთან თამაში ვერ დაიწყება.");}
-   if(!r.players.every(p=>{const u=registeredUsers.get(p.lc);return u&&!u.isGuest&&!u.buraEscrow&&balance(p.lc)>=STAKE;})){r.players.forEach(p=>p.ready=false);return errorRoom(r,"ორივე მოთამაშეს მინიმუმ 30 თავისუფალი მონეტა სჭირდება.");}
+   if(!r.players.every(p=>{const u=registeredUsers.get(p.lc);return u&&!!u.isGuest===!!r.guestTable&&!u.buraEscrow&&balance(p.lc)>=STAKE;})){r.players.forEach(p=>p.ready=false);return errorRoom(r,"ორივე მოთამაშეს მინიმუმ 30 თავისუფალი მონეტა სჭირდება.");}
    for(const p of r.players){coins(p.lc,-STAKE);registeredUsers.get(p.lc).buraEscrow={matchId:r.id,amount:STAKE};}saveAuthUsers();r.players.forEach(p=>coinNotice(p.lc));
   }
   clearTimer(r.cleanupTimer);closeInvites(r);r.game=G.createGame();r.status="playing";onStart();G.startRound(r.game,undefined,rng);schedule(r);list();
@@ -88,15 +88,14 @@ function createBura({io,registeredUsers,spendableCoins,changeCoins,saveAuthUsers
   on("bura:rankings",()=>{if(!limited("rank",1000))socket.emit("bura:rankings",{week:weekKey(now()),rows:rankings()});});
   on("bura:invite",(data={})=>{
    const a=identity();if(!a)return;if(limited(Array.isArray(data.toUsernames)&&data.toUsernames.length?"sendInvite":"createRoom",750))return err("მოიცადე წამი და მოწვევა ხელახლა გაგზავნე.");
-   if(a.u.isGuest)return err("ცოცხალ მოთამაშესთან სათამაშოდ შედი ანგარიშში; ბოტთან თამაში უფასოა.");
    let r=rooms.get(byUser.get(a.lc));if(r&&(r.status!=="lobby"||r.players[0].lc!==a.lc))return err("ჯერ დატოვე ან დაასრულე მიმდინარე ბურა.");
-   if(!r){r={id:crypto.randomBytes(12).toString("hex"),status:"lobby",bot:false,players:[person(socket,a.u,a.lc)],pending:new Map(),messages:[],version:0};rooms.set(r.id,r);byUser.set(a.lc,r.id);r.cleanupTimer=timer(()=>{for(const p of r.players)emit(p,"bura:closed");remove(r);},600000);}else bind(r,r.players[0]);
+   if(!r){r={id:crypto.randomBytes(12).toString("hex"),status:"lobby",bot:false,guestTable:!!a.u.isGuest,players:[person(socket,a.u,a.lc)],pending:new Map(),messages:[],version:0};rooms.set(r.id,r);byUser.set(a.lc,r.id);r.cleanupTimer=timer(()=>{for(const p of r.players)emit(p,"bura:closed");remove(r);},600000);}else bind(r,r.players[0]);
    const invited=[],cooldown=[],unavailable=[];
    for(const name of [...new Set(Array.isArray(data.toUsernames)?data.toUsernames.filter(n=>typeof n==="string").slice(0,6):[])]){
     const lc=name.trim().toLowerCase(),u=registeredUsers.get(lc),key=a.lc+"|"+lc;
     if(lc===a.lc||r.pending.has(lc)||r.players.some(p=>p.lc===lc))continue;
     if((cooldowns.get(key)||0)>now()){cooldown.push(u?.username||name);continue;}
-    if(r.players.length>=2||!u||u.isGuest||!isVisiblyOnline(lc)||blocked(a.lc,lc)||byUser.has(lc)){unavailable.push(name);continue;}
+    if(r.players.length>=2||!u||!!u.isGuest!==r.guestTable||!isVisiblyOnline(lc)||blocked(a.lc,lc)||byUser.has(lc)){unavailable.push(name);continue;}
     const inv={timer:timer(()=>{r.pending.delete(lc);io.to(`user:${lc}`).emit("bura:inviteClosed",{roomId:r.id});},45000)};r.pending.set(lc,inv);
     io.to(`user:${lc}`).emit("bura:invited",{roomId:r.id,fromUsername:a.u.username,stake:STAKE,expiresAt:now()+45000});r.kicked?.delete(lc);notifyGameInvite(lc,"bura",r.id,a.u.username);invited.push(u.username);
    }
@@ -108,7 +107,7 @@ function createBura({io,registeredUsers,spendableCoins,changeCoins,saveAuthUsers
    const a=identity(),r=rooms.get(d.roomId);if(!a||limited("join",300))return;if(!r)return err("მაგიდა აღარ არსებობს. ბალანსი თამაშების გვერდზე გადაამოწმე.","ROOM_CLOSED");
    const existing=r.players.find(p=>p.lc===a.lc);
    if(existing){if(byUser.has(a.lc)&&byUser.get(a.lc)!==r.id)return err("უკვე სხვა ბურას თამაშობ.");bind(r,existing);if(r.status==="playing"&&!r.game.finished){if(r.deadline)r.remaining=Math.max(1,r.deadline-now());schedule(r);}publish(r);return;}
-   if(a.u.isGuest||r.kicked?.has(a.lc)||r.bot||r.status!=="lobby"||r.players.length>=2||blocked(a.lc,r.players[0].lc)||byUser.has(a.lc))return err("მაგიდასთან შემოერთება ახლა ვერ ხერხდება.");
+   if(!!a.u.isGuest!==!!r.guestTable||r.kicked?.has(a.lc)||r.bot||r.status!=="lobby"||r.players.length>=2||blocked(a.lc,r.players[0].lc)||byUser.has(a.lc))return err("მაგიდასთან შემოერთება ახლა ვერ ხერხდება.");
    r.players.push(person(socket,a.u,a.lc));byUser.set(a.lc,r.id);closeInvites(r);publish(r);list();
   });
   on("bura:bot",()=>{const a=identity();if(!a||limited("bot",1500))return;if(byUser.has(a.lc))return err("ჯერ დატოვე მიმდინარე ბურა.");const r={id:crypto.randomBytes(12).toString("hex"),status:"lobby",bot:true,players:[{...person(socket,a.u,a.lc),ready:true},{lc:"$bot",username:"ბურას ოსტატი",avatar:"avatar2.png",bot:true,connected:true,ready:true}],pending:new Map(),messages:[],version:0};rooms.set(r.id,r);byUser.set(a.lc,r.id);start(r);publish(r);});

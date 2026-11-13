@@ -3,6 +3,8 @@
 
   const card = document.getElementById("cityNavCard");
   const label = document.getElementById("cityNavStatus");
+  const gameTile = document.getElementById("cityGameTile");
+  const gameLabel = document.getElementById("cityGameHours");
   let refreshTimer;
   let pending = false;
 
@@ -10,13 +12,18 @@
     if (open) {
       card.href = "/city.html";
       card.removeAttribute("aria-disabled");
+      gameTile.href = card.href;
+      gameTile.removeAttribute("aria-disabled");
     } else {
       card.removeAttribute("href");
       card.setAttribute("aria-disabled", "true");
+      gameTile.removeAttribute("href");
+      gameTile.setAttribute("aria-disabled", "true");
     }
     label.textContent = open === true ? "ღიაა 05:00-მდე"
       : open === false ? "დაკეტილია · გაიხსნება 21:00-ზე"
       : "სამუშაო საათები · 21:00–05:00";
+    gameLabel.textContent = label.textContent;
   }
 
   async function refresh() {

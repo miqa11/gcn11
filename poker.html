@@ -700,6 +700,7 @@
   let socket = null;
   let currentRoomId = getRoomParam() || null;
   let onlineUsers = [];
+  let guestPlayer = false;
   let selectedInvitees = new Set();
   let latestRoom = null;
   let timerInterval = null;
@@ -709,7 +710,7 @@
     const list = $("onlineFriendsList");
     if (!onlineUsers.length) {
       list.innerHTML = `<div class="pk-empty-state">ახლა არავინ არის ონლაინ.<br><small>დაელოდე ვინმეს შემოსვლას.</small></div>`;
-      $("createTableBtn").disabled = true;
+      $("createTableBtn").disabled = !guestPlayer;
       return;
     }
     list.innerHTML = "";
@@ -730,14 +731,15 @@
         const lc = u.username.toLowerCase();
         if (selectedInvitees.has(lc)) selectedInvitees.delete(lc); else selectedInvitees.add(lc);
         row.classList.toggle("selected");
-        $("createTableBtn").disabled = selectedInvitees.size === 0;
+        $("createTableBtn").disabled = !guestPlayer && selectedInvitees.size === 0;
       });
       list.appendChild(row);
     });
-    $("createTableBtn").disabled = selectedInvitees.size === 0;
+    $("createTableBtn").disabled = !guestPlayer && selectedInvitees.size === 0;
   }
 
   function renderPublicRooms(rooms) {
+    rooms = (rooms || []).filter(r => !!r.guestTable === guestPlayer);
     const list = $("publicRoomList");
     list.innerHTML = "";
     if (!rooms || !rooms.length) {
@@ -1254,6 +1256,7 @@
     });
 
     socket.on("auth:authenticated", ({ username: authedName, isGuest } = {}) => {
+      guestPlayer = !!isGuest;
       if (isGuest && authedName) {
         myUsernameLower = authedName.toLowerCase();
         try { sessionStorage.setItem("gaicani_guest_username", authedName); } catch (_) {}
@@ -1270,7 +1273,7 @@
     socket.on("poker:balance", ({ coins }) => { if (!latestRoom) setCoinsDisplay(coins); });
 
     socket.on("users:onlineList", ({ users }) => {
-      onlineUsers = (users || []).filter(u => u.username.toLowerCase() !== myUsernameLower);
+      onlineUsers = (users || []).filter(u => !!u.isGuest === guestPlayer && u.username.toLowerCase() !== myUsernameLower);
       renderOnlineFriends();
     });
     socket.on("users:onlineChanged", () => socket.emit("users:listOnline"));
