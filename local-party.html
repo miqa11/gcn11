@@ -33,6 +33,12 @@
             <label id="player-setting">მოთამაშეების რაოდენობა
               <select id="player-count"></select>
             </label>
+            <label id="deduction-duration-setting" hidden>რაუნდის დრო (წუთები)
+              <input id="deduction-minutes" type="number" min="1" max="15" step="1" value="3" disabled required>
+            </label>
+            <label id="outsider-setting" hidden><span id="outsider-label">იმპოსტორების რაოდენობა</span>
+              <select id="outsider-count"></select>
+            </label>
             <label id="mode-setting" hidden>თამაშის რეჟიმი
               <select id="alias-mode">
                 <option value="pair">ორი მოთამაშე</option>
@@ -87,14 +93,12 @@
         <h2 tabindex="-1">თქვით მინიშნებები ხმამაღლა</h2>
         <p id="first-speaker"></p>
         <p>რიგრიგობით თქვით თითო მინიშნება და შემდეგ იმსჯელეთ, ვის შეიძლება ჰქონდეს სხვა ბარათი. საიდუმლო სიტყვა არ გაამხილოთ.</p>
-        <button class="button primary" id="start-vote" type="button">ხმის მიცემა</button>
+        <p id="deduction-time" class="deduction-clock" role="timer" aria-label="დარჩენილი დრო"></p>
       </section>
 
-      <section class="play" id="ballot" hidden>
-        <p class="eyebrow" id="vote-label"></p>
-        <h2 id="vote-title" class="turn-name" tabindex="-1"></h2>
-        <p>აირჩიე ერთი მოთამაშე. არჩევის შემდეგ შენი ხმა დაიმალება.</p>
-        <div class="choices" id="vote-choices"></div>
+      <section class="play" id="deduction-expired" hidden>
+        <h2 tabindex="-1">დრო ამოიწურა</h2>
+        <button class="button primary" id="reveal-outsiders" type="button"></button>
       </section>
 
       <section class="play" id="deduction-result" hidden>

@@ -4,13 +4,13 @@
   const modes = {
     imposter: {
       title: "იმპოსტორი",
-      description: "ყველას ერთი სიტყვა ერგება, იმპოსტორის გარდა. მინიშნებებით გამოარკვიეთ, ვინ დარჩა უსიტყვოდ.",
+      description: "იმპოსტორები სიტყვას ვერ ხედავენ. გამოიცანით, ვის შეხვდა საიდუმლო როლი.",
       rule: "იმპოსტორი სიტყვას ვერ ხედავს. სხვების მინიშნებებით ეცადოს, თავი არ გასცეს."
     },
     different: {
       title: "განსხვავებული სიტყვა",
-      description: "ერთ მოთამაშეს ოდნავ განსხვავებული სიტყვა შეხვდება. გაარკვიეთ, ვისი მინიშნება განსხვავდება სხვებისგან.",
-      rule: "ერთ მოთამაშეს მსგავსი, მაგრამ განსხვავებული სიტყვა ხვდება. ბარათზე როლი არ წერია და ყველა მოთამაშე თავის როლს მინიშნებებით არკვევს."
+      description: "ზოგ მოთამაშეს ოდნავ განსხვავებული სიტყვა შეხვდება. გამოიცანით, ვის შეხვდა ის.",
+      rule: "არჩეულ მოთამაშეებს მსგავსი, მაგრამ განსხვავებული სიტყვა ხვდებათ. ბარათზე როლი არ წერია და ყველა მოთამაშე თავის როლს მინიშნებებით არკვევს."
     },
     alias: {
       title: "ალიასი",
@@ -64,7 +64,6 @@
       set("private-note", "");
       drawPartyArt($("private-art"), null);
     }
-    if (id !== "ballot") $("vote-choices").replaceChildren();
     if (id !== "alias-play") {
       set("alias-word", "");
       drawPartyArt($("alias-art"), null);
@@ -100,6 +99,14 @@
     $("team-setting").hidden = !teams;
     $("target-setting").hidden = !teams;
     const count = teams ? Number($("team-count").value) : isAlias ? 2 : Number($("player-count").value);
+    if (!isAlias) {
+      const selector = $("outsider-count");
+      const chosen = Number(selector.value) || 1;
+      const max = Math.floor((count - 1) / 2);
+      selector.replaceChildren();
+      for (let n = 1; n <= max; n++) selector.add(new Option(n, n));
+      selector.value = String(Math.min(chosen, max));
+    }
     const nameType = teams ? "teams" : "players";
     const container = $("names");
     const previous = draftNames[container.dataset.kind];
@@ -119,32 +126,37 @@
   }
 
   function startDeduction() {
+    set("result-note", "");
     const pair = nextPair();
     const side = pick(2);
+    const count = Number($("outsider-count").value);
+    const seats = names.map((_, index) => index);
+    for (let i = 0; i < count; i++) {
+      const j = i + pick(seats.length - i);
+      [seats[i], seats[j]] = [seats[j], seats[i]];
+    }
     deduction = {
       common: pair[side], odd: mode === "different" ? pair[1 - side] : "",
-      oddPlayer: pick(names.length), starter: pick(names.length), index: 0,
-      candidates: names.map((_, index) => index), votes: [], runoff: false
+      outsiders: new Set(seats.slice(0, count)), starter: pick(names.length), index: 0,
+      duration: $("deduction-minutes").valueAsNumber * 60000, deadline: 0
     };
-    handoff(false);
+    handoff();
   }
 
-  function handoff(voting) {
-    const { index, runoff } = deduction;
-    set("handoff-progress", `${voting ? (runoff ? "განმეორებითი კენჭისყრა" : "ხმის მიცემა") : "ბარათების დარიგება"} · ${index + 1}/${names.length}`);
+  function handoff() {
+    const { index } = deduction;
+    set("handoff-progress", "ბარათების დარიგება · " + (index + 1) + "/" + names.length);
     set("handoff-title", names[index]);
-    set("handoff-note", voting
-      ? "გადააწოდეთ მოწყობილობა ამ მოთამაშეს. დანარჩენებმა ეკრანს მოარიდეთ თვალი."
-      : "გადააწოდეთ მოწყობილობა ამ მოთამაშეს. ბარათი მხოლოდ მან უნდა ნახოს.");
-    set("open-private", voting ? "ბიულეტენის გახსნა" : "ბარათის ნახვა");
-    $("open-private").onclick = voting ? openBallot : openCard;
+    set("handoff-note", "გადააწოდეთ მოწყობილობა ამ მოთამაშეს. ბარათი მხოლოდ მან უნდა ნახოს.");
+    set("open-private", "ბარათის ნახვა");
+    $("open-private").onclick = openCard;
     show("handoff");
   }
 
   function openCard() {
     if (screen !== "handoff") return;
-    const { index, oddPlayer, common, odd } = deduction;
-    const word = index === oddPlayer ? odd : common;
+    const { index, outsiders, common, odd } = deduction;
+    const word = outsiders.has(index) ? odd : common;
     set("card-player", names[index]);
     set("private-word", word || "შენ ხარ იმპოსტორი");
     drawPartyArt($("private-art"), word ? partyWordArt.get(word) : "@imposter");
@@ -156,62 +168,36 @@
     if (screen !== "private-card") return;
     deduction.index++;
     if (deduction.index < names.length) {
-      handoff(false);
+      handoff();
     } else {
       set("first-speaker", `პირველი მინიშნება · ${names[deduction.starter]}`);
+      deduction.deadline = Date.now() + deduction.duration;
       show("discussion");
+      tickDeduction();
+      clock = setInterval(tickDeduction, 200);
     }
   }
 
-  function beginVoting() {
-    deduction.index = 0;
-    deduction.votes = [];
-    handoff(true);
-  }
-
-  function openBallot() {
-    if (screen !== "handoff") return;
-    const { index, candidates, runoff } = deduction;
-    set("vote-label", runoff ? "განმეორებითი კენჭისყრა" : "საიდუმლო კენჭისყრა");
-    set("vote-title", names[index]);
-    const choices = $("vote-choices");
-    choices.replaceChildren();
-    for (const candidate of candidates) {
-      if (candidate === index) continue;
-      const button = appendText(choices, "button", names[candidate]);
-      button.type = "button";
-      button.className = "button secondary";
-      button.onclick = () => vote(candidate);
-    }
-    show("ballot");
-  }
-
-  function vote(candidate) {
-    if (screen !== "ballot") return;
-    const round = deduction;
-    round.votes.push(candidate);
-    round.index++;
-    if (round.index < names.length) {
-      handoff(true);
+  function tickDeduction() {
+    if (screen !== "discussion") return;
+    const seconds = Math.max(0, Math.ceil((deduction.deadline - Date.now()) / 1000));
+    if (!seconds) {
+      clearInterval(clock);
+      show("deduction-expired");
       return;
     }
-    const counts = names.map(() => 0);
-    for (const choice of round.votes) counts[choice]++;
-    const highest = Math.max(...counts);
-    const leaders = round.candidates.filter(index => counts[index] === highest);
-    if (leaders.length > 1 && !round.runoff) {
-      round.runoff = true;
-      round.candidates = leaders;
-      beginVoting();
-      return;
-    }
-    const groupWon = leaders[0] === round.oddPlayer;
-    const outsider = mode === "imposter" ? "იმპოსტორი" : "განსხვავებული სიტყვის მფლობელი";
-    set("result-title", leaders.length > 1 ? "ფრეა" : groupWon ? "ჯგუფმა გაიმარჯვა" : `გაიმარჯვა · ${names[round.oddPlayer]}`);
-    set("result-note", leaders.length > 1 ? "განმეორებით კენჭისყრაშიც ხმები თანაბრად გაიყო." : `ყველაზე მეტი ხმა · ${names[leaders[0]]}`);
-    displayRows("revealed", [[outsider, names[round.oddPlayer]], ["საერთო სიტყვა", round.common],
-      ...(round.odd ? [["განსხვავებული სიტყვა", round.odd]] : [])]);
+    const time = Math.floor(seconds / 60) + ":" + String(seconds % 60).padStart(2, "0");
+    if ($("deduction-time").textContent !== time) set("deduction-time", time);
+    $("deduction-time").toggleAttribute("data-low", seconds <= 10);
+  }
+
+  function revealDeduction() {
+    if (screen !== "deduction-expired") return;
+    const { outsiders, common, odd } = deduction;
+    set("result-title", mode === "different" ? "განსხვავებული სიტყვის მფლობელები" : outsiders.size === 1 ? "იმპოსტორი" : "იმპოსტორები");
+    set("result-note", names.filter((_, index) => outsiders.has(index)).join(", "));
     show("deduction-result");
+    displayRows("revealed", [["საერთო სიტყვა", common], ...(odd ? [["განსხვავებული სიტყვა", odd]] : [])]);
   }
 
   function startAlias() {
@@ -311,6 +297,10 @@
   set("description", game.description);
   $("player-setting").hidden = isAlias;
   $("mode-setting").hidden = $("duration-setting").hidden = !isAlias;
+  $("deduction-duration-setting").hidden = $("outsider-setting").hidden = isAlias;
+  $("deduction-minutes").disabled = isAlias;
+  set("outsider-label", mode === "different" ? "რამდენ მოთამაშეს შეხვდება განსხვავებული სიტყვა" : "იმპოსტორების რაოდენობა");
+  set("reveal-outsiders", mode === "different" ? "განსხვავებული ბარათების გამხელა" : "იმპოსტორების გამხელა");
   for (let count = 3; count <= 12; count++) $("player-count").add(new Option(count, count));
   $("player-count").value = "4";
   for (const rule of isAlias ? [
@@ -321,9 +311,7 @@
   ] : [
     "მოწყობილობა რიგრიგობით გადააწოდეთ ერთმანეთს. ყველამ მხოლოდ საკუთარი ბარათი ნახოს.",
     game.rule,
-    "რიგრიგობით თქვით თითო მინიშნება სიტყვაზე ისე, რომ თავად სიტყვა არ თქვათ. შემდეგ ერთად განიხილეთ მინიშნებები.",
-    "საიდუმლოდ მიეცით ხმა მოთამაშეს, რომელსაც განსხვავებულ ბარათს აბრალებთ. თუ ყველაზე მეტი ხმა მან მიიღო, ჯგუფმა მოიგო, სხვა შემთხვევაში კი გამარჯვება მას ეკუთვნის.",
-    "თანაბარი ხმებისას ხელახლა უყარეთ კენჭი პირველ ადგილზე გასულ მოთამაშეებს. განმეორებითი თანაბრობა ფრეა."
+    "რიგრიგობით თქვით თითო მინიშნება სიტყვაზე ისე, რომ თავად სიტყვა არ თქვათ. შემდეგ ერთად განიხილეთ მინიშნებები."
   ]) appendText($("rule-list"), "li", rule);
   renderSettings();
 
@@ -342,14 +330,14 @@
     else startDeduction();
   };
   $("settings").onclick = () => {
-    const finished = screen === "deduction-result" || (screen === "alias-result" && alias.winner !== -1);
+    const finished = screen === "deduction-result" || screen === "deduction-expired" || (screen === "alias-result" && alias.winner !== -1);
     if (!finished && !window.confirm("მიმდინარე თამაში დასრულდება. გადავიდეთ პარამეტრებზე?")) return;
     clearInterval(clock);
     deduction = alias = null;
     show("setup");
   };
   $("pass-card").onclick = passCard;
-  $("start-vote").onclick = beginVoting;
+  $("reveal-outsiders").onclick = revealDeduction;
   $("next-deduction").onclick = startDeduction;
   $("alias-start").onclick = startAliasTurn;
   $("alias-correct").onclick = () => answerAlias(true);
@@ -359,7 +347,9 @@
     else readyAlias();
   };
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) tickAlias();
-    else if (screen === "private-card" || screen === "ballot") handoff(screen === "ballot");
+    if (!document.hidden) {
+      tickAlias();
+      tickDeduction();
+    } else if (screen === "private-card") handoff();
   });
 })();
