@@ -1225,7 +1225,7 @@ body:not(.guest-mode) .user-avatar::after {
   width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
   font-size: 12px; background: #2b2454; box-shadow: 0 0 0 2px var(--gold), 0 4px 10px rgba(0,0,0,.4);
 }
-body.guest-mode .profile-actions { display: none; }
+body.guest-mode .profile-actions, body.guest-mode .game-tile--flappy { display: none; }
 /* ── Dashboard screens: home / 👤 profile / 🎮 games ─────────────────────── */
 .page[data-current="home"]    > [data-view]:not([data-view~="home"]),
 .page[data-current="profile"] > [data-view]:not([data-view~="profile"]),
@@ -1798,7 +1798,13 @@ body.guest-mode .profile-actions { display: none; }
       <div class="games-heading-label">🎮 თამაშები</div>
     </div>
 
+    <p class="live-empty" id="guestGamesCoins" data-view="games" hidden>🪙 დროებითი მონეტები · <strong id="guestGamesCoinCount">—</strong></p>
     <div class="game-grid" data-view="games">
+      <a id="cityGameTile" class="game-tile game-tile--imposter" role="link" aria-disabled="true">
+        <div class="game-tile-icon" aria-hidden="true">🌃</div>
+        <div class="game-tile-name">გაიცანი ქალაქი</div>
+        <small id="cityGameHours"></small>
+      </a>
       <a href="/flappy-bird.html" class="game-tile game-tile--flappy">
         <div class="game-tile-icon"><img src="/icon-flappybird.jpg" alt="მფრინავი ჩიტი" loading="lazy" decoding="async" /></div>
         <div class="game-tile-name">მფრინავი ჩიტი</div>
@@ -2799,13 +2805,14 @@ function profileChipsHTML(p) {
         }
       });
 
-      socket.on("auth:authenticated", ({ username, friends, pendingRequests, avatar, bio, streaks, isGuest, guestToken, isPro, vipUntil, appearOffline, blockedUsers: serverBlockedUsers }) => {
+      socket.on("auth:authenticated", ({ username, friends, pendingRequests, avatar, bio, streaks, isGuest, guestToken, coins, isPro, vipUntil, appearOffline, blockedUsers: serverBlockedUsers }) => {
         document.getElementById("dashboardLogo").href = isGuest ? "/?welcome=1" : "/dashboard.html";
         applyPrivacyState({ appearOffline });
         if (isGuest) {
           try { sessionStorage.setItem("gaicani_guest_username", username); } catch (_) {}
           authUser = { username, token: guestToken || null, friends: [], pendingRequests: [], avatar: avatar || AVAILABLE_AVATARS[0], bio: bio || "", isGuest: true };
           enterGuestMode();
+          paintCoins(coins);
           if (typeof window._bindGuestRenameListener === "function") window._bindGuestRenameListener(socket);
         } else {
           // Real account — account deletion only makes sense here. Guests have
@@ -2967,13 +2974,13 @@ function profileChipsHTML(p) {
       socket.on("drawGuess:publicRooms", (rooms) => renderDgRooms(rooms || []));
 
       // ── Poker / Chess / Checkers / Joker — same active-tables browser under each button ──
-      socket.on("poker:publicRooms", (rooms) => renderPkRooms(rooms || []));
+      socket.on("poker:publicRooms", (rooms) => renderPkRooms((rooms || []).filter(room => !!room.guestTable === !!authUser?.isGuest)));
       socket.on("chess:publicRooms", (rooms) => renderCsRooms(rooms || []));
       socket.on("checkers:publicRooms", (rooms) => renderDmRooms(rooms || []));
       socket.on("joker:publicRooms", (rooms) => renderJkRooms(rooms || []));
       socket.on("imposter:publicRooms", (rooms) => renderImRooms(rooms || []));
-      socket.on("blackjack:publicRooms", (rooms) => renderBjRooms(rooms || []));
-      socket.on("nardi:publicRooms", (rooms) => renderNaRooms(rooms || []));
+      socket.on("blackjack:publicRooms", (rooms) => renderBjRooms((rooms || []).filter(room => !!room.guestTable === !!authUser?.isGuest)));
+      socket.on("nardi:publicRooms", (rooms) => renderNaRooms((rooms || []).filter(room => !!room.guestTable === !!authUser?.isGuest)));
       socket.on("nardi:invited", ({roomId,fromUsername}) => {
         const bar=document.getElementById("dgInviteBar");bar.dataset.nardiRoom=roomId;
         bar.innerHTML=`<span>🎲 <strong>${esc(fromUsername)}</strong>-მა მოგიწვია ნარდზე · მატჩის ფსონი 30 მონეტა</span><button class="dg-invite-accept na-invite-accept">მიღება</button><button class="dg-invite-decline">უარი</button>`;bar.classList.add("show");
@@ -2981,7 +2988,7 @@ function profileChipsHTML(p) {
         bar.querySelector(".dg-invite-decline").onclick=()=>{bar.classList.remove("show");socket.emit("nardi:declineInvite",{roomId});};
       });
       socket.on("nardi:inviteClosed", ({roomId}) => {const bar=document.getElementById("dgInviteBar");if(bar.dataset.nardiRoom===roomId&&bar.querySelector(".na-invite-accept"))bar.classList.remove("show");});
-      socket.on("bura:publicRooms", (rooms) => renderBuRooms(rooms || []));
+      socket.on("bura:publicRooms", (rooms) => renderBuRooms((rooms || []).filter(room => !!room.guestTable === !!authUser?.isGuest)));
       socket.on("bura:invited", ({roomId,fromUsername}) => {
         const bar=document.getElementById("dgInviteBar");bar.dataset.buraRoom=roomId;
         bar.innerHTML=`<span>♠ <strong>${esc(fromUsername)}</strong>-მა მოგიწვია ბურაზე · მატჩის ფსონი 30 მონეტა</span><button class="dg-invite-accept bu-invite-accept">მიღება</button><button class="dg-invite-decline">უარი</button>`;bar.classList.add("show");
@@ -3452,6 +3459,11 @@ function profileChipsHTML(p) {
     // 🪙 One coin balance for the whole site (poker, blackjack, the shop).
     function paintCoins(n) {
       if (typeof n !== "number") return;
+      if (authUser?.isGuest) {
+        document.getElementById("guestGamesCoins").hidden = false;
+        document.getElementById("guestGamesCoinCount").textContent = fmtCoins(n);
+        return;
+      }
       const chip = document.getElementById("coinChip");
       if (!chip) return;
       chip.hidden = false;

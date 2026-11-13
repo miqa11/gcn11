@@ -490,6 +490,7 @@
   let socket = null;
   let currentRoomId = getRoomParam() || null;
   let onlineUsers = [];
+  let guestPlayer = false;
   let selectedInvitees = new Set();
   let latestRoom = null;
   let timerInterval = null;
@@ -528,6 +529,7 @@
   }
 
   function renderPublicGames(rooms) {
+    rooms = (rooms || []).filter(r => !!r.guestTable === guestPlayer);
     const list = $("publicGameList");
     list.innerHTML = "";
     if (!rooms || !rooms.length) {
@@ -897,6 +899,7 @@
     });
 
     socket.on("auth:authenticated", ({ username: authedName, isGuest } = {}) => {
+      guestPlayer = !!isGuest;
       if (isGuest && authedName) {
         myUsernameLower = authedName.toLowerCase();
         try { sessionStorage.setItem("gaicani_guest_username", authedName); } catch (_) {}
@@ -911,7 +914,7 @@
     socket.on("auth:invalid", () => { window.location.href = "/"; });
 
     socket.on("users:onlineList", ({ users }) => {
-      onlineUsers = (users || []).filter(u => u.username.toLowerCase() !== myUsernameLower);
+      onlineUsers = (users || []).filter(u => !!u.isGuest === guestPlayer && u.username.toLowerCase() !== myUsernameLower);
       renderOnlineFriends();
     });
     socket.on("users:onlineChanged", () => socket.emit("users:listOnline"));

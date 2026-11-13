@@ -54,6 +54,7 @@ function createRandomChatReconnect({ activeUsernames, graceMs, setTimer = setTim
     if (ghost._regUser && !ghost._regUser.isGuest) {
       return socket._regUser?.usernameLower === ghost._regUser.usernameLower && !socket._regUser.isGuest;
     }
+    if (ghost._guestWalletKey) return ghost._guestWalletKey === socket._guestWalletKey;
     return !!ghost._did && ghost._did === socket._did;
   }
 

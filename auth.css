@@ -23,6 +23,17 @@
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
+.auth-games-link {
+  flex: 0 0 44px;
+  min-height: 44px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  background: rgba(124, 92, 255, .22);
+  color: #f1e9ff;
+  text-decoration: none;
+  font-size: 1rem;
+}
 .auth-tab.active {
   background: rgba(88,101,242,0.25);
   color: #a78bfa;

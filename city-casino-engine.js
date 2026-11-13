@@ -61,9 +61,9 @@ function createCityCasinoEngine({ io, registeredUsers, spendableCoins, ensureCoi
   const machines = MACHINE_DEFINITIONS;
   const accountFor = socket => {
     const identity = socket && socket._regUser;
-    if (!identity || identity.isGuest || !identity.usernameLower) return null;
+    if (!identity || !identity.usernameLower) return null;
     const user = registeredUsers.get(identity.usernameLower);
-    return user && !user.isGuest ? { user, lc:identity.usernameLower } : null;
+    return user ? { user, lc:identity.usernameLower } : null;
   };
   const publicMachines = () => Object.values(machines).map(m => ({
     id:m.id,name:m.name,subtitle:m.subtitle,icon:m.icon,color:m.color,description:m.description,
@@ -93,9 +93,9 @@ function createCityCasinoEngine({ io, registeredUsers, spendableCoins, ensureCoi
   function coinState(user, lc) {
     return Number.isFinite(user.coins) ? spendableCoins(user,lc) : ensureCoins(user);
   }
-  function stateFor(user, lc, registered = true) {
-    if (!registered) return {
-      registered:false,coins:null,machines:publicMachines(),betOptions:BET_OPTIONS.slice(),pairMultiplier:PAIR_MULTIPLIER,
+  function stateFor(user, lc) {
+    if (!user) return {
+      registered:false,canPlay:false,coins:null,machines:publicMachines(),betOptions:BET_OPTIONS.slice(),pairMultiplier:PAIR_MULTIPLIER,
       featuredMachineId:featuredId(),leaderboard:publicLeaderboard(),history:[],bonusSpins:0,bonusBet:0,
       disclaimer:"მონეტები მხოლოდ ვირტუალური სათამაშო ქულებია. მათ ფულადი ღირებულება არ აქვთ და ფულით ვერ იყიდი ან გადაცვლი."
     };
@@ -103,7 +103,7 @@ function createCityCasinoEngine({ io, registeredUsers, spendableCoins, ensureCoi
     ensureCoins(user);
     ensureNonce(user);
     return {
-      registered:true,coins:coinState(user,lc),nonce:user.casinoSpinNonce,machines:publicMachines(),betOptions:BET_OPTIONS.slice(),
+      registered:!user.isGuest,canPlay:true,coins:coinState(user,lc),nonce:user.casinoSpinNonce,machines:publicMachines(),betOptions:BET_OPTIONS.slice(),
       pairMultiplier:PAIR_MULTIPLIER,featuredMachineId:featuredId(),leaderboard:publicLeaderboard(),
       history:Array.isArray(user.casinoTransactions)?user.casinoTransactions.slice(-30).reverse():[],
       bonusSpins:Math.max(0,Math.floor(user.casinoBonusSpins||0)),bonusBet:Math.max(0,Math.floor(user.casinoBonusBet||0)),
@@ -147,7 +147,7 @@ function createCityCasinoEngine({ io, registeredUsers, spendableCoins, ensureCoi
   }
   function spin(socket, data, ack) {
     const account=accountFor(socket);
-    if (!account) return reply(ack,{error:"ვირტუალური მონეტებით სათამაშოდ დარეგისტრირდი ან შედი ანგარიშში. კაზინოს დათვალიერება ახლაც შეგიძლია."});
+    if (!account) return reply(ack,{error:"სათამაშო სესია ჯერ არ დაწყებულა. განაახლე კავშირი და სცადე ხელახლა."});
     const {user,lc}=account;
     const requestId=data&&typeof data.requestId==="string"?data.requestId:"";
     if (!/^[a-f0-9-]{36}$/i.test(requestId)) return reply(ack,{error:"დატრიალების მოთხოვნა არასწორია. სცადე ხელახლა."});
@@ -212,7 +212,7 @@ function createCityCasinoEngine({ io, registeredUsers, spendableCoins, ensureCoi
   function bind(socket) {
     socket.on("casino:state",(_data,ack)=>{
       const account=accountFor(socket);
-      reply(ack,account?stateFor(account.user,account.lc,true):stateFor(null,null,false));
+      reply(ack,stateFor(account?.user,account?.lc));
     });
     socket.on("casino:spin",(data,ack)=>spin(socket,data||{},ack));
   }

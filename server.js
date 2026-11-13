@@ -255,6 +255,17 @@ const io     = new Server(server, {
     callback(null, false);
   },
 });
+const GUEST_WALLET_COOKIE = "gaicani_guest_wallet";
+function guestWalletKey(req) {
+  return /(?:^|;\s*)gaicani_guest_wallet=([a-f0-9]{64})(?:;|$)/.exec(req.headers.cookie || "")?.[1];
+}
+io.engine.on("initial_headers", (headers, req) => {
+  if (guestWalletKey(req)) return;
+  req.gaicaniGuestWallet = authToken();
+  const cookie = GUEST_WALLET_COOKIE + "=" + req.gaicaniGuestWallet + "; Path=/; HttpOnly; SameSite=Lax" + secureCookieFlag(req);
+  headers["set-cookie"] = [].concat(headers["set-cookie"] || [], cookie);
+});
+
 const bypassLogAt = new Map(); // ip → when its last direct-connection attempt was logged
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -3543,47 +3554,14 @@ io.on("connection", (socket) => {
     if (typeof name !== "string") return;
     let trimmed = name.trim();
 
-    // ── Guests can't choose a name ────────────────────────────────────────
-    // Only a real registered account keeps the name it asked for. Everyone
-    // else gets "სტუმარი####". Three cases deliberately pass through
-    // untouched:
-    //   * a real logged-in account          → their own name, as before
-    //   * a name already in guest format     → same person continuing across
-    //                                          pages (continuity, not a choice)
-    //   * a registered account's name        → left for the ownership check
-    //                                          below, which rejects impostors
-    //                                          and admits the real owner. This
-    //                                          also covers the brief race where
-    //                                          a registered user's socket
-    //                                          hasn't finished logging in yet —
-    //                                          converting their name here would
-    //                                          wrongly strand them as a guest.
-    const isRealAccount = !!(socket._regUser && !socket._regUser.isGuest);
-    // Names can't be chosen or changed: a real account always appears under
-    // its own account name. Enforced here, so sending setName by hand with
-    // another name changes nothing.
-    if (isRealAccount) trimmed = socket._regUser.username;
-    // A guest who already has a guest name keeps it, instead of drawing a new
-    // random number on every setName.
-    if (!isRealAccount && socket.userName && GUEST_NAME_RE.test(socket.userName)) trimmed = socket.userName;
-    if (!isRealAccount && !GUEST_NAME_RE.test(trimmed) && !authReservedNames.has(trimmed.toLowerCase())) {
-      // Reuse this socket's existing guest identity if it has one, so random
-      // chat and the rest of the site show the SAME name, not two different
-      // random numbers.
-      const existingGuestName = socket._regUser?.isGuest && GUEST_NAME_RE.test(socket._regUser.username)
-        ? socket._regUser.username
-        : null;
-      const assigned = existingGuestName || generateGuestName();
-      if (!assigned) { socket.emit("nameTaken"); return; }
-      trimmed = assigned;
+    // A temporary wallet belongs to the browser session, never to a supplied display name.
+    if (!socket._regUser && authReservedNames.has(trimmed.toLowerCase())) {
+      socket.emit("nameTaken");
+      return;
     }
-
-    // During a fresh entry a guest cannot resolve a collision by choosing a
-    // name. Keep a resumable session, otherwise assign an available name.
-    if (!isRealAccount && !resumeChat && GUEST_NAME_RE.test(trimmed) && !canUseGuestChatName(socket, trimmed)) {
-      trimmed = generateGuestName();
-      if (!trimmed) { socket.emit("nameTaken"); return; }
-    }
+    trimmed = socket._regUser?.username || authenticateGuest(socket);
+    if (!trimmed) return;
+    const isRealAccount = !socket._regUser.isGuest;
 
     if (trimmed.length < NAME_MIN || trimmed.length > NAME_MAX) return;
 
@@ -3601,9 +3579,6 @@ io.on("connection", (socket) => {
     }
 
     function acceptName() {
-      if (socket._regUser?.isGuest && socket._regUser.username !== trimmed) {
-        startGuestSession(socket, trimmed);
-      }
       socket.userName = trimmed;
       socket._randomChatName = lowerTrimmed;
       socket._randomChatTakeoverFrom = null;
@@ -3626,26 +3601,6 @@ io.on("connection", (socket) => {
         socket.emit("nameTaken");
         return;
       }
-      if (isRealAccount && activeUsernames.has(lowerTrimmed) && !canResume) {
-        // Only move this account’s random-chat socket. Dashboard and game sockets stay connected.
-        const sessions = onlineRegSockets.get(lowerTrimmed) || [];
-        for (const id of sessions) {
-          if (id === socket.id) continue;
-          const oldChat = io.sockets.sockets.get(id);
-          if (!oldChat?.connected || oldChat._randomChatName !== lowerTrimmed ||
-              oldChat._regUser?.isGuest || oldChat._regUser?.usernameLower !== lowerTrimmed) continue;
-          if (!takeover || socket._randomChatTakeoverFrom !== id) {
-            socket._randomChatTakeoverFrom = id;
-            socket.emit("randomChat:sessionInUse");
-            return;
-          }
-          socket._randomChatTakeoverFrom = null;
-          oldChat.emit("randomChat:sessionMoved");
-          oldChat.disconnect(true);
-          canResume = randomReconnect.canResume(socket, lowerTrimmed);
-          break;
-        }
-      }
       // Owner is reclaiming — evict any anonymous socket currently holding it
       if (activeUsernames.has(lowerTrimmed) && !pendingDisconnects.has(lowerTrimmed)) {
         for (const [, s] of io.sockets.sockets) {
@@ -3659,6 +3614,28 @@ io.on("connection", (socket) => {
             break;
           }
         }
+      }
+    }
+
+    if (activeUsernames.has(lowerTrimmed) && !canResume) {
+      // Only move this account’s random-chat socket. Dashboard and game sockets stay connected.
+      const sessions = onlineRegSockets.get(lowerTrimmed) || [];
+      for (const id of sessions) {
+        if (id === socket.id) continue;
+        const oldChat = io.sockets.sockets.get(id);
+        if (!oldChat?.connected || oldChat._randomChatName !== lowerTrimmed ||
+            oldChat._regUser?.usernameLower !== lowerTrimmed ||
+            (!isRealAccount && (!socket._guestWalletKey || oldChat._guestWalletKey !== socket._guestWalletKey))) continue;
+        if (!takeover || socket._randomChatTakeoverFrom !== id) {
+          socket._randomChatTakeoverFrom = id;
+          socket.emit("randomChat:sessionInUse");
+          return;
+        }
+        socket._randomChatTakeoverFrom = null;
+        oldChat.emit("randomChat:sessionMoved");
+        oldChat.disconnect(true);
+        canResume = randomReconnect.canResume(socket, lowerTrimmed);
+        break;
       }
     }
 
@@ -5116,6 +5093,7 @@ const friendActivities=require("./server-friend-activities").createFriendActivit
 const authTokens        = new Map(); // token → { usernameLower, expiry }
 const privateRooms      = new Map(); // roomId → { messages, createdAt, expiresAt }
 const onlineRegSockets  = new Map(); // lowerUsername → Set<socketId>
+const guestWallets      = new Map(); // browser cookie → temporary guest account and idle expiry
 const guestSocketMap    = new Map(); // socketId → guest's lowerUsername (for cleanup on disconnect — guests never persist)
 const guestTokenMap     = new Map(); // socketId → their temporary REST token (for cleanup alongside the rest of the session)
 const GUEST_TOKEN_TTL   = 4 * 60 * 60 * 1000; // 4h — a guest's REST token outlives brief reconnects but not a real "come back tomorrow"
@@ -5714,15 +5692,6 @@ const FLAPPY_COIN_REWARD  = 10000;
 // is accepted as "this is still me", anything else is replaced.
 const GUEST_NAME_RE = /^სტუმარი\d{4}$/;
 
-function canUseGuestChatName(socket, name) {
-  const key = name.toLowerCase();
-  return !authReservedNames.has(key) && (
-    socket._randomChatName === key ||
-    (!activeUsernames.has(key) && !pendingDisconnects.has(key)) ||
-    randomReconnect.canResume(socket, key)
-  );
-}
-
 function generateGuestName() {
   for (let i = 0; i < 50; i++) {
     const n  = `სტუმარი${Math.floor(1000 + Math.random() * 9000)}`;
@@ -5747,20 +5716,41 @@ function endGuestSession(socket) {
     if (!sockets.size) onlineRegSockets.delete(lc);
   }
   if (![...guestSocketMap.values()].includes(lc)) {
-    registeredUsers.delete(lc);
+    const wallet = guestWallets.get(socket._guestWalletKey);
+    if (wallet?.lc === lc) wallet.expiresAt = Date.now() + GUEST_TOKEN_TTL;
+    else registeredUsers.delete(lc);
     announceOnlineChanged();
   }
+}
+
+function authenticateGuest(socket) {
+  const key = socket.request.gaicaniGuestWallet || guestWalletKey(socket.request);
+  const wallet = guestWallets.get(key);
+  if (wallet?.expiresAt && Date.now() >= wallet.expiresAt) {
+    if (registeredUsers.get(wallet.lc)?.isGuest) registeredUsers.delete(wallet.lc);
+    guestWallets.delete(key);
+  }
+  const user = registeredUsers.get(guestWallets.get(key)?.lc);
+  const username = user?.isGuest ? user.username : generateGuestName();
+  if (username) startGuestSession(socket, username);
+  else socket.emit("auth:invalid");
+  return username;
 }
 
 function startGuestSession(socket, username) {
   endGuestSession(socket);
   const lc = username.toLowerCase();
   const guestUser = registeredUsers.get(lc) || {
-    username, isGuest: true, createdAt: new Date().toISOString(),
+    username, isGuest: true, createdAt: new Date().toISOString(), coins: GUEST_STARTING_COINS,
     friends: [], pendingRequests: [], avatar: GUEST_AVATAR, bio: "",
   };
   registeredUsers.set(lc, guestUser);
   guestSocketMap.set(socket.id, lc);
+  const key = socket.request.gaicaniGuestWallet || guestWalletKey(socket.request);
+  if (key) {
+    socket._guestWalletKey = key;
+    guestWallets.set(key, { lc, expiresAt: 0 });
+  }
 
   socket._regUser = { usernameLower: lc, username, isGuest: true };
   socket.userName = username;
@@ -5771,14 +5761,14 @@ function startGuestSession(socket, username) {
   // Also issue a short-lived REST token (reusing the same authTokens /
   // requireRegAuth path real accounts use) so the client can fetch
   // read-only content over REST, not just sockets. Tracked
-  // for cleanup alongside the rest of the guest session on disconnect.
+  // for cleanup when this socket disconnects. The wallet can outlive it.
   const guestToken = authToken();
   authTokens.set(guestToken, { usernameLower: lc, expiry: Date.now() + GUEST_TOKEN_TTL, isGuest: true });
   guestTokenMap.set(socket.id, guestToken);
 
   socket.emit("auth:authenticated", {
     username, friends: [], pendingRequests: [], avatar: guestUser.avatar || GUEST_AVATAR, bio: guestUser.bio || "",
-    streaks: {}, isAdmin: false, isPro: false, isGuest: true, guestToken
+    streaks: {}, isAdmin: false, isPro: false, isGuest: true, guestToken, coins: spendableCoins(guestUser, lc)
   });
   console.log(`[AUTH] ${username} started a guest session`);
   announceOnlineChanged();
@@ -5924,7 +5914,9 @@ const ABUSE_WORD_MESSAGE = "ამ სიტყვის გამოყენ�
 // changeCoins).
 const STARTING_COINS = 1000;
 const COIN_REFILL_MS = 24 * 60 * 60 * 1000;
+const GUEST_STARTING_COINS = 500;
 function ensureCoins(user) {
+  if (user.isGuest) return user.coins ??= GUEST_STARTING_COINS;
   if (typeof user.coins !== "number") {
     user.coins = STARTING_COINS;
     // The first grant starts the refill clock too — otherwise a first-ever
@@ -6392,6 +6384,11 @@ setInterval(() => {
 setInterval(() => {
   const now = Date.now();
   for (const [t, e] of authTokens) if (now >= e.expiry) authTokens.delete(t);
+  for (const [key, wallet] of guestWallets) {
+    if (!wallet.expiresAt || now < wallet.expiresAt) continue;
+    if (registeredUsers.get(wallet.lc)?.isGuest) registeredUsers.delete(wallet.lc);
+    guestWallets.delete(key);
+  }
 }, 60 * 60 * 1000);
 
 setInterval(() => {
@@ -6465,7 +6462,7 @@ app.post("/api/auth/register", authLimiter, express.json({ limit: "5kb" }), asyn
     return res.status(400).json({ error: "სახელი შეიცავს დაუშვებელ სიმბოლოებს" });
   if (findBannedWord(clean) || matchesBlockedUsername(clean))
     return res.status(400).json({ error: ABUSE_WORD_MESSAGE });
-  if (isStaffName(clean))
+  if (isStaffName(clean) || GUEST_NAME_RE.test(clean))
     return res.status(409).json({ error: "ეს სახელი დაკავებულია", suggestions: registrationNameSuggestions(clean) });
   if (password.length < 6 || password.length > 100)
     return res.status(400).json({ error: "პაროლი: 6–100 სიმბოლო" });
@@ -6697,11 +6694,11 @@ app.post("/api/auth/verify", express.json({ limit: "1kb" }), (req, res) => {
   recordAccountActivity(user);
   // The coin balance comes along (same rules as coins:get), so the
   // dashboard can show it without waiting for the live connection.
-  if (!user.isGuest) settlePendingCoins(user, entry.usernameLower);
+  settlePendingCoins(user, entry.usernameLower);
 
   res.json({
     success: true,
-    coins: user.isGuest ? undefined : spendableCoins(user, entry.usernameLower),
+    coins: spendableCoins(user, entry.usernameLower),
     username: user.username,
     friends: user.friends || [],
     pendingRequests: pendingNames(user),
@@ -8397,6 +8394,7 @@ function getPublicPokerRooms() {
     if (room.status === "ended") continue;
     if (room.players.length >= POKER_MAX_PLAYERS) continue;
     rows.push({
+      guestTable: room.guestTable,
       roomId: room.id,
       hostUsername: room.players.find(p => p.lc === room.hostLc)?.username || "",
       status: room.status,
@@ -8449,7 +8447,11 @@ function pokerFinishHand(room, result) {
   // sync it back the moment the hand resolves, regardless of reveal timing.
   for (const p of room.players) {
     const user = registeredUsers.get(p.lc);
-    if (user) { user.coins = p.stack; saveAuthUsers(); }
+    if (user) {
+      user.coins = p.stack;
+      if (!user.isGuest) saveAuthUsers();
+      io.to("user:" + p.lc).emit("coins:changed", { coins: p.stack });
+    }
   }
 
   // At a real showdown, broadcast the card reveal FIRST — room.stage is
@@ -10192,6 +10194,7 @@ function getPublicBjRooms() {
     if (room.status === "ended") continue;
     if (room.players.length >= BJ_MAX_PLAYERS) continue;
     rows.push({
+      guestTable: room.guestTable,
       roomId: room.id,
       hostUsername: room.players.find(p => p.lc === room.hostLc)?.username || "",
       status: room.status,
@@ -10396,7 +10399,11 @@ function bjSettleRound(room) {
   // Sync every seated player's persistent balance now that the round is over.
   for (const p of room.players) {
     const user = registeredUsers.get(p.lc);
-    if (user) { user.coins = p.stack; saveAuthUsers(); }
+    if (user) {
+      user.coins = p.stack;
+      if (!user.isGuest) saveAuthUsers();
+      io.to("user:" + p.lc).emit("coins:changed", { coins: p.stack });
+    }
   }
 
   room.phase = "roundEnd";
@@ -11257,9 +11264,9 @@ io.on("connection", (socket) => {
     if (!t) return;
     // Run auth:login logic directly (socket.emit won't trigger server-side listeners)
     const entry = authTokens.get(t);
-    if (!entry || Date.now() >= entry.expiry) { socket.emit("auth:invalid"); return; }
+    if (!entry || entry.isGuest || Date.now() >= entry.expiry) { socket.emit("auth:invalid"); return; }
     const user = registeredUsers.get(entry.usernameLower);
-    if (!user) return;
+    if (!user || user.isGuest) { socket.emit("auth:invalid"); return; }
     if (user.nameBlocked) { socket.emit("account:nameBlocked", { username: user.username }); return; }
     socket._regUser = { usernameLower: entry.usernameLower, username: user.username };
     evictGhostOf(socket);
@@ -11279,27 +11286,10 @@ io.on("connection", (socket) => {
     announceOnlineChanged(); // let dashboards know the online list may have changed
   });
 
-  // ── auth:guest — a temporary, throwaway identity for someone who hasn't
-  // registered, so they can still play games with
-  // the same interface a registered user sees. Lives only in memory for
-  // as long as this socket is connected: never written to disk (see the
-  // isGuest skip in _saveAuthUsersToDisk), and cleaned up on disconnect
-  // below. Registered-only actions (friends, private messages, posting)
-  // still check isGuest and refuse with a "register to do this" message —
-  // this only grants read/play access, not the full account.
-  socket.on("auth:guest", (data) => {
-    if (socket._regUser) return; // already authenticated one way or the other
-
-    // The chat handshake can finish before guest auth. If it did, use the
-    // accepted name instead of the older value sent from sessionStorage.
-    const preferred = socket._randomChatName ? socket.userName
-      : typeof data?.preferredUsername === "string" ? data.preferredUsername.trim() : "";
-    const holder = registeredUsers.get(preferred.toLowerCase());
-    const username = GUEST_NAME_RE.test(preferred) && (!holder || holder.isGuest)
-      ? preferred
-      : generateGuestName();
-    if (!username) { socket.emit("auth:invalid"); return; }
-    startGuestSession(socket, username);
+  // Resume the browser’s temporary game balance, or create a new guest.
+  socket.on("auth:guest", () => {
+    if (socket._regUser) return;
+    authenticateGuest(socket);
     evictGhostOf(socket);
   });
 
@@ -12725,7 +12715,6 @@ io.on("connection", (socket) => {
 
   socket.on("poker:invite", ({ toUsernames }) => {
     if (!socket._regUser) return;
-    if (socket._regUser.isGuest) { socket.emit("poker:error", { message:"რეგისტრაცია ან შესვლა გჭირდება მონეტებზე თამაშისთვის." }); return; }
     const hostLc = socket._regUser.usernameLower;
     const hostUser = registeredUsers.get(hostLc);
     if (!hostUser) return;
@@ -12745,12 +12734,13 @@ io.on("connection", (socket) => {
       settlePendingCoins(hostUser, hostUser.username.toLowerCase()); // coins won while away (Flappy…)
       const startingStack = ensureCoins(hostUser);
       if (startingStack <= 0) {
-        socket.emit("poker:error", { message: "დღეს უკვე გამოიყენე უფასო მონეტების შევსება — დაბრუნდი ხვალ." });
+        socket.emit("poker:error", { message: hostUser.isGuest ? "დროებითი მონეტები ამოიწურა." : "დღეს უკვე გამოიყენე უფასო მონეტების შევსება — დაბრუნდი ხვალ." });
         return;
       }
       room = {
         id: makePokerRoomId(),
         hostLc,
+        guestTable: !!hostUser.isGuest,
         status: "lobby",
         stage: "lobby",
         players: [{ lc: hostLc, username: hostUser.username, socketId: socket.id, stack: startingStack, connected: true, folded: false, allIn: false, currentBet: 0, totalBetThisHand: 0, holeCards: [] }],
@@ -12776,7 +12766,7 @@ io.on("connection", (socket) => {
       if (!isVisiblyOnline(lc)) continue;
 
       const targetUser = registeredUsers.get(lc);
-      if (!targetUser || targetUser.isGuest) continue;
+      if (!targetUser || !!targetUser.isGuest !== room.guestTable) continue;
       if (trinderBlocked(hostUser, hostLc, targetUser, lc)) { blocked.push(targetUser.username); continue; }
 
       const cdKey = `${hostLc}|${lc}`;
@@ -12810,17 +12800,16 @@ io.on("connection", (socket) => {
   // always exactly what they'd bring to a table right now.
   socket.on("poker:getBalance", () => {
     if (!socket._regUser) return;
-    if (socket._regUser.isGuest) { socket.emit("poker:error", { message:"რეგისტრაცია ან შესვლა გჭირდება მონეტებზე თამაშისთვის." }); return; }
     const user = registeredUsers.get(socket._regUser.usernameLower);
     if (!user) return;
     settlePendingCoins(user, socket._regUser.usernameLower);
-    socket.emit("poker:balance", { coins: ensureCoins(user) });
+    socket.emit("poker:balance", { coins: spendableCoins(user, socket._regUser.usernameLower) });
   });
   // 🪙 Your site-wide coin balance (blackjack lobby, dashboard).
   socket.on("coins:get", (_d, ack) => {
     if (typeof ack !== "function") return;
     const user = socket._regUser && registeredUsers.get(socket._regUser.usernameLower);
-    if (!user || user.isGuest) return ack({ error: "registered-only" });
+    if (!user) return ack({ error: "session-required" });
     settlePendingCoins(user, socket._regUser.usernameLower);
     ack({ coins: spendableCoins(user, socket._regUser.usernameLower) });
   });
@@ -12844,19 +12833,19 @@ io.on("connection", (socket) => {
   // tables" list. Brings your full current coin balance to the table.
   socket.on("poker:join", ({ roomId }) => {
     if (!socket._regUser) return;
-    if (socket._regUser.isGuest) { socket.emit("poker:error", { message:"რეგისტრაცია ან შესვლა გჭირდება მონეტებზე თამაშისთვის." }); return; }
     const lc = socket._regUser.usernameLower;
     const user = registeredUsers.get(lc);
     if (!user) return;
 
-    const existingRoomId = pokerRoomBySocket.get(socket.id);
-    if (existingRoomId && existingRoomId !== roomId) cleanupPokerForSocket(socket.id);
-
     const room = pokerRooms.get(roomId);
     if (!room) { socket.emit("poker:error", { message: "მაგიდა ვეღარ მოიძებნა — შეიძლება უკვე დასრულდა." }); return; }
+    if (!!user.isGuest !== room.guestTable) { socket.emit("poker:error", { message: "აირჩიე შენი ანგარიშის ტიპის მაგიდა." }); return; }
     if (room.status === "ended") { socket.emit("poker:error", { message: "ეს თამაში უკვე დასრულდა." }); return; }
 
     if (room.kicked?.has(lc)) { socket.emit("poker:error", { message: LOBBY_KICKED_MSG }); return; }
+    const existingRoomId = pokerRoomBySocket.get(socket.id);
+    if (existingRoomId && existingRoomId !== roomId) cleanupPokerForSocket(socket.id);
+
     const already = room.players.find(p => p.lc === lc);
     if (already) {
       already.socketId = socket.id;
@@ -12870,12 +12859,13 @@ io.on("connection", (socket) => {
     }
 
     if (room.players.length >= POKER_MAX_PLAYERS) { socket.emit("poker:error", { message: "მაგიდა სავსეა." }); return; }
+    if (user.isGuest && findActivePokerRoomForUser(lc)) { socket.emit("poker:error", { message: "ჯერ დატოვე მიმდინარე მაგიდა." }); return; }
     if (findActiveBjRoomForUser(lc)) { socket.emit("poker:error", { message: AT_OTHER_TABLE_MSG }); return; }
 
     settlePendingCoins(user, user.username.toLowerCase()); // coins won while away (Flappy…)
     const startingStack = ensureCoins(user);
     if (startingStack <= 0) {
-      socket.emit("poker:error", { message: "დღეს უკვე გამოიყენე უფასო მონეტების შევსება — დაბრუნდი ხვალ." });
+      socket.emit("poker:error", { message: user.isGuest ? "დროებითი მონეტები ამოიწურა." : "დღეს უკვე გამოიყენე უფასო მონეტების შევსება — დაბრუნდი ხვალ." });
       return;
     }
 
@@ -13797,7 +13787,6 @@ io.on("connection", (socket) => {
 
   socket.on("blackjack:invite", ({ toUsernames }) => {
     if (!socket._regUser) return;
-    if (socket._regUser.isGuest) { socket.emit("blackjack:error", { message:"რეგისტრაცია ან შესვლა გჭირდება მონეტებზე თამაშისთვის." }); return; }
     const hostLc = socket._regUser.usernameLower;
     const hostUser = registeredUsers.get(hostLc);
     if (!hostUser) return;
@@ -13819,6 +13808,7 @@ io.on("connection", (socket) => {
       room = {
         id: makeBjRoomId(),
         hostLc,
+        guestTable: !!hostUser.isGuest,
         status: "lobby",
         players: [{ lc: hostLc, username: hostUser.username, socketId: socket.id, connected: true, seat: 0, stack: hostUser.coins, bet: null, hands: [] }],
         pendingInvites: new Map(),
@@ -13842,7 +13832,7 @@ io.on("connection", (socket) => {
       if (!isVisiblyOnline(lc)) continue;
 
       const targetUser = registeredUsers.get(lc);
-      if (!targetUser || targetUser.isGuest) continue;
+      if (!targetUser || !!targetUser.isGuest !== room.guestTable) continue;
       if (trinderBlocked(hostUser, hostLc, targetUser, lc)) { blocked.push(targetUser.username); continue; }
 
       const cdKey = `${hostLc}|${lc}`;
@@ -13886,19 +13876,19 @@ io.on("connection", (socket) => {
 
   socket.on("blackjack:join", ({ roomId }) => {
     if (!socket._regUser) return;
-    if (socket._regUser.isGuest) { socket.emit("blackjack:error", { message:"რეგისტრაცია ან შესვლა გჭირდება მონეტებზე თამაშისთვის." }); return; }
     const lc = socket._regUser.usernameLower;
     const user = registeredUsers.get(lc);
     if (!user) return;
 
-    const existingRoomId = bjRoomBySocket.get(socket.id);
-    if (existingRoomId && existingRoomId !== roomId) cleanupBjForSocket(socket.id);
-
     const room = bjRooms.get(roomId);
     if (!room) { socket.emit("blackjack:error", { message: "მაგიდა ვეღარ მოიძებნა — შეიძლება უკვე დასრულდა." }); return; }
+    if (!!user.isGuest !== room.guestTable) { socket.emit("blackjack:error", { message: "აირჩიე შენი ანგარიშის ტიპის მაგიდა." }); return; }
     if (room.status === "ended") { socket.emit("blackjack:error", { message: "ეს თამაში უკვე დასრულდა." }); return; }
 
     if (room.kicked?.has(lc)) { socket.emit("blackjack:error", { message: LOBBY_KICKED_MSG }); return; }
+    const existingRoomId = bjRoomBySocket.get(socket.id);
+    if (existingRoomId && existingRoomId !== roomId) cleanupBjForSocket(socket.id);
+
     const already = room.players.find(p => p.lc === lc);
     if (already) {
       already.socketId = socket.id;
@@ -13912,6 +13902,7 @@ io.on("connection", (socket) => {
     }
 
     if (room.players.length >= BJ_MAX_PLAYERS) { socket.emit("blackjack:error", { message: "მაგიდა სავსეა." }); return; }
+    if (user.isGuest && findActiveBjRoomForUser(lc)) { socket.emit("blackjack:error", { message: "ჯერ დატოვე მიმდინარე მაგიდა." }); return; }
     if (findActivePokerRoomForUser(lc)) { socket.emit("blackjack:error", { message: AT_OTHER_TABLE_MSG }); return; }
 
     const invite = room.pendingInvites.get(lc);
