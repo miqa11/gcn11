@@ -952,6 +952,10 @@
       else { showScreen("table"); renderGame(room); }
     });
 
+    socket.on("blackjack:switchedGame", () => {
+      backToSetup();
+      showToast("სხვა თამაშზე გადახვედი.");
+    });
     socket.on("blackjack:error", ({ message }) => showToast(message));
     socket.on("blackjack:kicked", () => { showToast("🚫 მასპინძელმა ლობიდან გაგაგდო"); backToSetup(); });
     socket.on("blackjack:kickDone", ({ username }) => showToast(`${username} ლობიდან გააგდე`));
