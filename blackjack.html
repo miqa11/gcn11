@@ -293,7 +293,7 @@
     }
   </style>
   <link rel="stylesheet" href="/card-tables.css" />
-  <script src="/card-table-art.js"></script><script src="/card-table-motion.js"></script>
+  <script src="/card-table-art.js"></script><script src="/card-table-sound.js"></script><script src="/card-table-motion.js"></script>
 </head>
 <body class="card-room card-room-blackjack">
 <div id="app">
@@ -351,6 +351,7 @@
       <button id="tableBackBtn" class="bj-icon-btn" title="უკან">←</button>
       <div class="bj-header-title">🂡 ბლექჯეკი</div>
       <div class="bj-coin-chip">🪙 <span id="tableCoins">—</span></div>
+      <button type="button" class="bj-icon-btn gc-card-sound" data-card-sound-toggle aria-pressed="true" aria-label="თამაშის ხმა" title="თამაშის ხმა"><span aria-hidden="true">♪</span></button>
       <button id="chatToggleBtn" class="bj-icon-btn" title="ჩატი" style="position:relative;">
         💬<span id="chatUnreadDot" class="bj-chat-unread-dot"></span>
       </button>
@@ -784,7 +785,9 @@
   let prevBjSnap = null;
 
   function renderGame(room) {
+    const settled = latestRoom?.roomId === room.roomId && latestRoom.phase !== "roundEnd" && room.phase === "roundEnd";
     GaicaniCardMotion.animate($("tableScreen"), room.roomId, () => drawGame(room), { deck: $("dealerCards") });
+    if (settled) GaicaniCardSound.play("result");
   }
 
   function drawGame(room) {

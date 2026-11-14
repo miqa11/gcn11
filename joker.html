@@ -430,7 +430,7 @@
     .jk-add-computer:disabled { opacity: .5; }
   </style>
   <link rel="stylesheet" href="/card-tables.css" />
-  <script src="/card-table-art.js"></script><script src="/card-table-motion.js"></script>
+  <script src="/card-table-art.js"></script><script src="/card-table-sound.js"></script><script src="/card-table-motion.js"></script>
 </head>
 <body class="card-room card-room-joker">
 <div id="app">
@@ -490,6 +490,7 @@
         <div class="jk-set-label" id="setLabel">სეტი 1 — ზრდადი</div>
       </div>
       <div class="jk-trump-chip" id="trumpChip">—</div>
+      <button type="button" class="jk-icon-btn gc-card-sound" data-card-sound-toggle aria-pressed="true" aria-label="თამაშის ხმა" title="თამაშის ხმა"><span aria-hidden="true">♪</span></button>
       <button id="chatToggleBtn" class="jk-icon-btn" title="ჩატი" style="width:32px;height:32px;position:relative;">
         💬<span id="chatUnreadDot" class="jk-chat-unread-dot"></span>
       </button>
@@ -1205,7 +1206,10 @@
       $("meTimer").textContent = "";
     }
 
-    if (room.phase === "handEnd") showHandEndOverlay(room);
+    if (room.phase === "handEnd") {
+      if (!$("handEndOverlay").classList.contains("show")) GaicaniCardSound.play("result");
+      showHandEndOverlay(room);
+    }
     else $("handEndOverlay").classList.remove("show");
 
     if (room.finalResult) { showGameEndOverlay(room); $("handEndOverlay").classList.remove("show"); }

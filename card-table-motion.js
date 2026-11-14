@@ -54,16 +54,19 @@
     Math.abs(a.width - b.width) + Math.abs(a.height - b.height);
 
   function animate(root, tableId, render, { deck, collect } = {}) {
-    const previousTable = tables.get(root);
+    const sameTable = tables.get(root) === tableId;
     tables.set(root, tableId);
-    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !Element.prototype.animate) return render();
-    const before = previousTable === tableId ? measure(root) : new Map();
+    const motion = !matchMedia("(prefers-reduced-motion: reduce)").matches && !!Element.prototype.animate;
+    const before = sameTable ? measure(root) : new Map();
     render();
     const after = measure(root);
     const deckRect = deck?.getBoundingClientRect() || root.getBoundingClientRect();
     const origin = center(deckRect);
     const kept = new Set();
     let dealt = 0;
+    let flipped = false;
+    let moved = false;
+    let collected = false;
 
     for (const [key, current] of after) {
       const { el, rect } = current;
@@ -73,13 +76,19 @@
         if (previous.el === el) continue;
         const flight = flights.get(previous.el);
         if (!previous.el.dataset.tableFace && el.dataset.tableFace) {
-          const back = ghost(root, previous);
-          play(back, [{ scale: "1 1" }, { scale: "0 1" }], 135).finished.then(() => back.remove(), () => back.remove());
-          play(el, [{ scale: "0 1" }, { scale: "1 1" }], 165, 135, rect);
-        } else if (flight?.animation.playState === "running" && distance(flight.target, rect) < 1) {
+          flipped = true;
+          if (motion) {
+            const back = ghost(root, previous);
+            const turn = (start, end) => [{ transform: start }, { transform: end }];
+            const edge = "perspective(550px) rotateY(-90deg)";
+            play(back, turn("perspective(550px) rotateY(0deg)", edge), 125).finished.then(() => back.remove(), () => back.remove());
+            play(el, turn("perspective(550px) rotateY(90deg)", "perspective(550px) rotateY(0deg)"), 175, 125, rect);
+          }
+        } else if (motion && flight?.animation.playState === "running" && distance(flight.target, rect) < 1) {
           play(el, flight.frames, flight.duration, flight.delay, rect).currentTime = flight.animation.currentTime;
         } else if (distance(previous.rect, rect) > 1) {
-          play(el, [
+          moved ||= !!el.dataset.tableFrom;
+          if (motion) play(el, [
             { translate: delta(center(previous.rect), rect), scale: `${previous.rect.width / rect.width} ${previous.rect.height / rect.height}` },
             { translate: "0 0", scale: "1" }
           ], 270, 0, rect);
@@ -93,23 +102,32 @@
       if (Math.hypot(start.x - target.x, start.y - target.y) < 7) {
         start.x -= 18; start.y -= 24;
       }
-      play(el, [
-        { translate: delta(start, rect), scale: ".68", opacity: 0 },
-        { opacity: 1, offset: .36 },
-        { translate: "0 0", scale: "1", opacity: 1 }
-      ], 320, Math.min(240, dealt++ * 36), rect);
+      if (motion) play(el, [
+        { translate: delta(start, rect), scale: ".66", rotate: (dealt % 2 ? 7 : -7) + "deg", opacity: 0 },
+        { opacity: 1, offset: .34 },
+        { translate: "0 0", scale: "1", rotate: "0deg", opacity: 1 }
+      ], 350, Math.min(220, dealt * 40), rect);
+      dealt++;
     }
 
     for (const [key, previous] of before) {
       if (kept.has(key)) continue;
       const destination = collect ? collect(previous.el, key) : deck;
       if (destination === false) continue;
+      collected = true;
+      if (!motion) continue;
       const copy = ghost(root, previous);
       const to = destination?.getBoundingClientRect();
       play(copy, [
         { translate: "0 0", scale: "1", opacity: 1 },
         { translate: delta(to?.width ? center(to) : origin, previous.rect), scale: ".6", opacity: 0 }
       ], 280).finished.then(() => copy.remove(), () => copy.remove());
+    }
+    if (sameTable) {
+      if (flipped) window.GaicaniCardSound?.play("flip");
+      else if (dealt) window.GaicaniCardSound?.play("deal", dealt);
+      else if (collected) window.GaicaniCardSound?.play("collect");
+      else if (moved) window.GaicaniCardSound?.play("move");
     }
   }
 

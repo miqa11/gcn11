@@ -168,9 +168,11 @@
  socket.on("coins:changed",({coins})=>{$("setupBalance").textContent=coins+" 🪙";});
  socket.on("bura:room",data=>{
   const chatOnly=data.chatOnly&&room?.roomId===data.roomId&&room.version===data.version;
+  const settled = room?.roomId === data.roomId && data.game?.result &&
+   (!room.game?.result || room.game.roundNumber !== data.game.roundNumber);
   room=data;offset=(data.serverNow||Date.now())-Date.now();
   if(chatOnly){paintChat();return;}
-  busy=false;selected=selected.filter(c=>data.game?.myHand.includes(c));history.replaceState(null,"","/bura.html?room="+encodeURIComponent(data.roomId));if(data.status==="lobby")paintLobby();else{screen("game");paintTable();}paintChat();
+  busy=false;selected=selected.filter(c=>data.game?.myHand.includes(c));history.replaceState(null,"","/bura.html?room="+encodeURIComponent(data.roomId));if(data.status==="lobby")paintLobby();else{screen("game");paintTable();if(settled)GaicaniCardSound.play("result");}paintChat();
  });
  socket.on("bura:error",({message,code})=>{busy=false;if(code==="ROOM_CLOSED")reset();toast(message);if(room?.game){paintHand();paintActions();}});
  socket.on("bura:publicRooms",rooms=>{rooms=rooms.filter(r=>!!r.guestTable===guestPlayer);const box=$("publicRooms");box.replaceChildren();for(const r of rooms){const row=node("div","bu-list-row"),b=node("button","bu-btn secondary","შემოერთება · 30");b.addEventListener("click",()=>socket.emit("bura:join",{roomId:r.roomId}));b.disabled=r.playerCount>=2;row.append(node("span","name",r.hostUsername+` · ${r.playerCount}/2`),b);box.append(row);}if(!rooms.length)box.append(node("div","bu-empty","ღია მაგიდა ჯერ არ არის."));});

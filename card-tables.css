@@ -284,3 +284,60 @@ body.card-room {
   .card-room .jk-trick-slot { width:32px; height:45px; }
   .card-room .jk-hand-label { bottom:auto; top:45%; left:calc(100% + 14px); transform:none; font-size:8px; }
 }
+
+/* Card-table lighting stays inside each existing surface and layout. */
+.card-room.card-room-poker { --table-light:#29765a; --table-mid:#145440; --table-dark:#082d25; }
+.card-room.card-room-joker { --table-light:#326d86; --table-mid:#184759; --table-dark:#081f2d; }
+.card-room.card-room-blackjack { --table-light:#485379; --table-mid:#2d3658; --table-dark:#171d36; }
+.card-room.card-room-bura .bu-stage {
+  background:var(--cloth), radial-gradient(ellipse at 50% 22%,#327265,#205444 56%,#102c29 100%);
+  box-shadow:0 0 0 1px #e1bd7a85,0 0 0 4px #171c1b,0 0 0 6px #765c35,0 14px 30px #0009,inset 0 0 0 2px #efd39b40,inset 0 0 38px #0007;
+}
+.card-room :is(.pk-table-oval,.bj-table-body,.jk-table,.bu-stage) {
+  border-color:#302721;
+  background-clip:padding-box;
+}
+.card-room .gc-deck-card:not(.selected):not(.legal):not(.illegal) {
+  box-shadow:0 1px 0 #fff9 inset,0 2px 0 #c6b798,0 4px 7px #0006,0 10px 14px -9px #000b;
+}
+.card-room :is(.pk-card-back,.bj-card.back,.bu-back) {
+  background-image:
+    radial-gradient(ellipse at 50% 24%,#ffffff26,transparent 60%),
+    repeating-linear-gradient(45deg,#e3bf7333 0 1px,transparent 1px 6px),
+    repeating-linear-gradient(-45deg,#e3bf7333 0 1px,transparent 1px 6px);
+  background-color:#172e4a;
+}
+.card-room :is(.pk-card-back,.bj-card.back,.bu-back)::after {
+  background:radial-gradient(ellipse,#a5813650,transparent 74%);
+}
+.card-room .gc-card-sound {
+  position:relative;
+  flex:0 0 38px;
+  width:38px;
+  min-width:38px;
+  min-height:36px;
+  padding:0;
+  box-sizing:border-box;
+  display:inline-grid;
+  place-items:center;
+  background:#15272b;
+  border:1px solid #dfc38e65;
+  border-radius:10px;
+  color:#ffe2a7;
+  font:700 20px/1 system-ui,sans-serif;
+  cursor:pointer;
+}
+.card-room .gc-card-sound[aria-pressed="false"] { color:#b4b5ad; background:#151b21; }
+.card-room .gc-card-sound[aria-pressed="false"] span::after {
+  content:"";
+  position:absolute;
+  width:19px;
+  height:2px;
+  left:50%;
+  top:50%;
+  background:currentColor;
+  transform:translate(-50%,-50%) rotate(-45deg);
+}
+@media (max-width:360px) {
+  .card-room .gc-card-sound { flex-basis:33px; width:33px; min-width:33px; }
+}
