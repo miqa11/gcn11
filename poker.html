@@ -429,7 +429,7 @@
     }
   </style>
   <link rel="stylesheet" href="/card-tables.css" />
-  <script src="/card-table-art.js"></script><script src="/card-table-motion.js"></script>
+  <script src="/card-table-art.js"></script><script src="/card-table-sound.js"></script><script src="/card-table-motion.js"></script>
 </head>
 <body class="card-room card-room-poker">
 <div id="app">
@@ -490,6 +490,7 @@
       <button id="tableBackBtn" class="pk-icon-btn" title="უკან">←</button>
       <div class="pk-header-title">🃏 პოკერი</div>
       <div class="pk-coin-chip">🪙 <span id="tableCoins">—</span></div>
+      <button type="button" class="pk-icon-btn gc-card-sound" data-card-sound-toggle aria-pressed="true" aria-label="თამაშის ხმა" title="თამაშის ხმა"><span aria-hidden="true">♪</span></button>
       <button id="chatToggleBtn" class="pk-icon-btn" title="ჩატი" style="position:relative;">
         💬<span id="chatUnreadDot" class="pk-chat-unread-dot"></span>
       </button>
@@ -1314,6 +1315,7 @@
     });
 
     socket.on("poker:handResult", (data) => {
+      GaicaniCardSound.play("result");
       animatePotToWinners(data, () => showHandResult(data));
     });
 

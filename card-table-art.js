@@ -38,7 +38,7 @@
     } else if (/[JQK]/.test(card[0])) center = court(card[0], color, glyph);
     else if (card[0] === "A") center = `${pip(glyph, 50, 70, 58)}<path d="M35 110H65" stroke="#cbb887"/><text x="50" y="122" fill="#9e875a" font-family="Georgia,serif" font-size="7" text-anchor="middle">◆</text>`;
     else center = layouts[card[0]].map(([x, y]) => pip(glyph, x, y, card[0] === "T" || card[0] === "9" ? 19 : 23)).join("");
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="gc-deck-face" viewBox="0 0 100 140" aria-hidden="true" focusable="false"><rect x=".6" y=".6" width="98.8" height="138.8" rx="7" fill="#fffdf5" stroke="#d3cdbd"/><rect x="3" y="3" width="94" height="134" rx="5" fill="none" stroke="#efe8d7"/><g fill="${color}" font-family="Georgia, 'Times New Roman', serif">${corner}<g transform="rotate(180 50 70)">${corner}</g>${center}</g></svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" class="gc-deck-face" viewBox="0 0 100 140" aria-hidden="true" focusable="false"><rect x=".6" y=".6" width="98.8" height="138.8" rx="7" fill="#fffdf5" stroke="#cdbd9f"/><path d="M5 65V9a4 4 0 0 1 4-4h56M95 75v56a4 4 0 0 1-4 4H35" stroke="#dac5a2" fill="none"/><path d="M72 5h19a4 4 0 0 1 4 4v19M28 135H9a4 4 0 0 1-4-4v-19" stroke="#eadbc0" fill="none"/><g fill="${color}" font-family="Georgia, 'Times New Roman', serif">${corner}<g transform="rotate(180 50 70)">${corner}</g>${center}</g></svg>`;
     cache.set(card, svg);
     return svg;
   }
