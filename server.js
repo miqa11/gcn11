@@ -5934,7 +5934,6 @@ function ensureCoins(user) {
   return user.coins;
 }
 // You can't sit at a poker and a blackjack table at the same time (see above).
-const AT_OTHER_TABLE_MSG = "ჯერ დაასრულე მეორე თამაში — მონეტები პოკერსა და ბლექჯეკში ერთია, ორივე მაგიდასთან ერთდროულად ვერ დაჯდები.";
 
 // ── Crypto helpers ────────────────────────────────────────────────────────────
 // IMPORTANT: these use the ASYNC pbkdf2 (not pbkdf2Sync). On a small CPU
@@ -8375,7 +8374,7 @@ function pokerRoomStateForViewer(room, viewerLc) {
 function broadcastPokerRoom(room) {
   for (const p of room.players) {
     const s = io.sockets.sockets.get(p.socketId);
-    if (s) s.emit("poker:room", pokerRoomStateForViewer(room, p.lc));
+    if (s && p.transferredStack === undefined) s.emit("poker:room", pokerRoomStateForViewer(room, p.lc));
   }
 }
 
@@ -8383,7 +8382,7 @@ function broadcastPokerRoom(room) {
 function findActivePokerRoomForUser(lc) {
   for (const room of pokerRooms.values()) {
     if (room.status === "ended") continue;
-    if (room.players.some(p => p.lc === lc)) return room;
+    if (room.players.some(p => p.lc === lc && p.transferredStack === undefined)) return room;
   }
   return null;
 }
@@ -8448,9 +8447,14 @@ function pokerFinishHand(room, result) {
   for (const p of room.players) {
     const user = registeredUsers.get(p.lc);
     if (user) {
-      user.coins = p.stack;
-      if (!user.isGuest) saveAuthUsers();
-      io.to("user:" + p.lc).emit("coins:changed", { coins: p.stack });
+      if (p.transferredStack === undefined) {
+        user.coins = p.stack;
+        if (!user.isGuest) saveAuthUsers();
+      } else if (p.stack > p.transferredStack) {
+        changeCoins(user, p.lc, p.stack - p.transferredStack);
+        p.transferredStack = p.stack;
+      }
+      io.to("user:" + p.lc).emit("coins:changed", { coins: spendableCoins(user, p.lc) });
     }
   }
 
@@ -8472,7 +8476,7 @@ function pokerAnnounceHandResult(room, result) {
 
   for (const p of room.players) {
     const s = io.sockets.sockets.get(p.socketId);
-    if (!s) continue;
+    if (!s || p.transferredStack !== undefined) continue;
     s.emit("poker:handResult", {
       roomId: room.id,
       uncontested: result.uncontested,
@@ -8499,8 +8503,8 @@ function pokerAnnounceHandResult(room, result) {
   const leaving = room.players.filter(p => p.stack <= 0 || !p.connected);
   for (const p of leaving) {
     const s = io.sockets.sockets.get(p.socketId);
-    if (s) s.emit(p.stack <= 0 ? "poker:bustedOut" : "poker:kickedForDisconnect", { roomId: room.id });
-    pokerRoomBySocket.delete(p.socketId);
+    if (s && p.transferredStack === undefined) s.emit(p.stack <= 0 ? "poker:bustedOut" : "poker:kickedForDisconnect", { roomId: room.id });
+    if (pokerRoomBySocket.get(p.socketId) === room.id) pokerRoomBySocket.delete(p.socketId);
     s?.leave(`pokerroom:${room.id}`);
   }
   room.players = room.players.filter(p => p.stack > 0 && p.connected);
@@ -8557,7 +8561,7 @@ function cleanupPokerRoom(roomId) {
   if (room.nextHandTimeoutHandle) clearTimeout(room.nextHandTimeoutHandle);
   if (room.showdownRevealTimeoutHandle) clearTimeout(room.showdownRevealTimeoutHandle);
   for (const [lc, invite] of room.pendingInvites || []) clearTimeout(invite.timeoutHandle);
-  for (const p of room.players) pokerRoomBySocket.delete(p.socketId);
+  for (const p of room.players) { if (pokerRoomBySocket.get(p.socketId) === room.id) pokerRoomBySocket.delete(p.socketId); }
   pokerRooms.delete(roomId);
   broadcastPublicPokerRooms();
 }
@@ -8565,8 +8569,8 @@ function cleanupPokerRoom(roomId) {
 // Mirrors cleanupDrawGuessForSocket: drop from the lobby roster outright,
 // or fold-and-mark-disconnected if a hand is already underway (holding an
 // active hand hostage by going AFK isn't fair to the others at the table).
-function cleanupPokerForSocket(socketId) {
-  const roomId = pokerRoomBySocket.get(socketId);
+function cleanupPokerForSocket(socketId, table) {
+  const roomId = table?.id || pokerRoomBySocket.get(socketId);
   pokerRoomBySocket.delete(socketId);
   if (!roomId) return;
   const room = pokerRooms.get(roomId);
@@ -8586,7 +8590,7 @@ function cleanupPokerForSocket(socketId) {
 
   player.connected = false;
 
-  if (room.players.every(p => !p.connected)) { cleanupPokerRoom(room.id); return; }
+  if (room.players.every(p => !p.connected) && !room.players.some(p => p.transferredStack !== undefined)) { cleanupPokerRoom(room.id); return; }
 
   const midHand = room.stage && room.stage !== "waiting" && room.stage !== "showdown";
   if (midHand && !player.folded && !player.allIn) {
@@ -10176,14 +10180,14 @@ function broadcastBjRoom(room) {
   const payload = bjRoomStateForViewer(room);
   for (const p of room.players) {
     const s = io.sockets.sockets.get(p.socketId);
-    if (s) s.emit("blackjack:room", payload);
+    if (s && p.transferredStack === undefined) s.emit("blackjack:room", payload);
   }
 }
 
 function findActiveBjRoomForUser(lc) {
   for (const room of bjRooms.values()) {
     if (room.status === "ended") continue;
-    if (room.players.some(p => p.lc === lc)) return room;
+    if (room.players.some(p => p.lc === lc && p.transferredStack === undefined)) return room;
   }
   return null;
 }
@@ -10386,6 +10390,7 @@ function bjRevealAndDraw(room) {
 }
 
 function bjSettleRound(room) {
+  if (!bjRooms.has(room.id)) return;
   const dealerBJ = bjIsBlackjack(room.dealerCards);
   for (const p of room.players) {
     for (const h of p.hands || []) {
@@ -10400,9 +10405,14 @@ function bjSettleRound(room) {
   for (const p of room.players) {
     const user = registeredUsers.get(p.lc);
     if (user) {
-      user.coins = p.stack;
-      if (!user.isGuest) saveAuthUsers();
-      io.to("user:" + p.lc).emit("coins:changed", { coins: p.stack });
+      if (p.transferredStack === undefined) {
+        user.coins = p.stack;
+        if (!user.isGuest) saveAuthUsers();
+      } else if (p.stack > p.transferredStack) {
+        changeCoins(user, p.lc, p.stack - p.transferredStack);
+        p.transferredStack = p.stack;
+      }
+      io.to("user:" + p.lc).emit("coins:changed", { coins: spendableCoins(user, p.lc) });
     }
   }
 
@@ -10415,7 +10425,7 @@ function bjSettleRound(room) {
   // nothing, they'd just need to rejoin. Mirrors the same pattern used
   // for poker.
   const leaving = room.players.filter(p => !p.connected);
-  for (const p of leaving) { bjRoomBySocket.delete(p.socketId); }
+  for (const p of leaving) { if (bjRoomBySocket.get(p.socketId) === room.id) bjRoomBySocket.delete(p.socketId); }
   room.players = room.players.filter(p => p.connected);
 
   if (room.players.length === 0) { cleanupBjRoom(room.id); return; }
@@ -10430,13 +10440,13 @@ function cleanupBjRoom(roomId) {
   clearBjActionTimer(room);
   clearBjRoundTimer(room);
   for (const [, invite] of room.pendingInvites || []) clearTimeout(invite.timeoutHandle);
-  for (const p of room.players) bjRoomBySocket.delete(p.socketId);
+  for (const p of room.players) { if (bjRoomBySocket.get(p.socketId) === room.id) bjRoomBySocket.delete(p.socketId); }
   bjRooms.delete(roomId);
   broadcastPublicBjRooms();
 }
 
-function cleanupBjForSocket(socketId) {
-  const roomId = bjRoomBySocket.get(socketId);
+function cleanupBjForSocket(socketId, table) {
+  const roomId = table?.id || bjRoomBySocket.get(socketId);
   bjRoomBySocket.delete(socketId);
   if (!roomId) return;
   const room = bjRooms.get(roomId);
@@ -10455,7 +10465,13 @@ function cleanupBjForSocket(socketId) {
   }
 
   player.connected = false;
-  if (room.players.every(p => !p.connected)) { cleanupBjRoom(room.id); return; }
+  const settling = room.players.some(p => p.transferredStack !== undefined && p.hands?.length) &&
+    ["playing", "dealerPlay"].includes(room.phase);
+  if (room.players.every(p => !p.connected) && !settling) { cleanupBjRoom(room.id); return; }
+  if (table && room.phase === "playing" && room.players[room.turnSeat] === player) {
+    bjAutoStand(room);
+    return;
+  }
   // Mid-round, the bet/action timeouts already auto-act for whoever's turn
   // it is — a disconnected player is removed at the next round boundary
   // (see bjSettleRound), not ripped out mid-hand.
@@ -10711,9 +10727,27 @@ function streakUnlocks(before, after) {
 // balance — the table writes it back to user.coins after every hand — so a
 // change made meanwhile goes onto the seat too, and the table carries it on
 // from there. Nothing has to wait for the hand to end.
+function switchCoinGame(user, lc, nextGame) {
+  const oldPoker = nextGame === "blackjack";
+  const room = oldPoker ? findActivePokerRoomForUser(lc) : findActiveBjRoomForUser(lc);
+  const seat = room?.players.find(p => p.lc === lc && p.transferredStack === undefined);
+  if (!seat) return;
+  // Transfer uncommitted chips. The previous hand can still credit a payout.
+  user.coins = seat.stack;
+  seat.transferredStack = seat.stack;
+  if (oldPoker) {
+    cleanupPokerForSocket(seat.socketId, room);
+  } else {
+    if (room.phase === "betting") seat.bet = null;
+    cleanupBjForSocket(seat.socketId, room);
+  }
+  io.sockets.sockets.get(seat.socketId)?.emit((oldPoker ? "poker" : "blackjack") + ":switchedGame");
+  if (!user.isGuest) saveAuthUsers();
+}
+
 function coinSeat(lc) {
   const room = findActivePokerRoomForUser(lc) || findActiveBjRoomForUser(lc);
-  const seat = room && room.players.find(p => p.lc === lc);
+  const seat = room?.players.find(p => p.lc === lc && p.transferredStack === undefined);
   return seat ? { room, seat, poker: pokerRooms.get(room.id) === room } : null;
 }
 // What you can spend right now — at a table, the coins that aren't in play
@@ -12724,7 +12758,7 @@ io.on("connection", (socket) => {
       socket.emit("poker:error", { message: "თქვენ უკვე ხართ სხვა პოკერის მაგიდასთან — ჯერ დატოვეთ ან დაასრულეთ ის, სანამ ახალს შექმნით." });
       return;
     }
-    if (!room && findActiveBjRoomForUser(hostLc)) { socket.emit("poker:error", { message: AT_OTHER_TABLE_MSG }); return; }
+    if (!room) switchCoinGame(hostUser, hostLc, "poker");
 
     if (room) {
       const hostPlayer = room.players.find(p => p.lc === hostLc);
@@ -12847,6 +12881,10 @@ io.on("connection", (socket) => {
     if (existingRoomId && existingRoomId !== roomId) cleanupPokerForSocket(socket.id);
 
     const already = room.players.find(p => p.lc === lc);
+    if (already?.transferredStack !== undefined) {
+      socket.emit("poker:error", { message: "ამ მაგიდაზე წინა ხელი ჯერ სრულდება." });
+      return;
+    }
     if (already) {
       already.socketId = socket.id;
       already.connected = true;
@@ -12860,7 +12898,7 @@ io.on("connection", (socket) => {
 
     if (room.players.length >= POKER_MAX_PLAYERS) { socket.emit("poker:error", { message: "მაგიდა სავსეა." }); return; }
     if (user.isGuest && findActivePokerRoomForUser(lc)) { socket.emit("poker:error", { message: "ჯერ დატოვე მიმდინარე მაგიდა." }); return; }
-    if (findActiveBjRoomForUser(lc)) { socket.emit("poker:error", { message: AT_OTHER_TABLE_MSG }); return; }
+    switchCoinGame(user, lc, "poker");
 
     settlePendingCoins(user, user.username.toLowerCase()); // coins won while away (Flappy…)
     const startingStack = ensureCoins(user);
@@ -12909,7 +12947,7 @@ io.on("connection", (socket) => {
     const room = pokerRooms.get(roomId);
     if (!room || room.status !== "playing") return;
     const lc = socket._regUser.usernameLower;
-    const seat = room.players.findIndex(p => p.lc === lc);
+    const seat = room.players.findIndex(p => p.lc === lc && p.socketId === socket.id && p.transferredStack === undefined);
     if (seat === -1) return;
 
     const result = pokerApplyAction(room, seat, action, amount);
@@ -13796,7 +13834,7 @@ io.on("connection", (socket) => {
       socket.emit("blackjack:error", { message: "თქვენ უკვე ხართ სხვა მაგიდაზე — ჯერ დატოვეთ ან დაასრულეთ ის, სანამ ახალს შექმნით." });
       return;
     }
-    if (!room && findActivePokerRoomForUser(hostLc)) { socket.emit("blackjack:error", { message: AT_OTHER_TABLE_MSG }); return; }
+    if (!room) switchCoinGame(hostUser, hostLc, "blackjack");
 
     if (room) {
       const hostPlayer = room.players.find(p => p.lc === hostLc);
@@ -13890,6 +13928,10 @@ io.on("connection", (socket) => {
     if (existingRoomId && existingRoomId !== roomId) cleanupBjForSocket(socket.id);
 
     const already = room.players.find(p => p.lc === lc);
+    if (already?.transferredStack !== undefined) {
+      socket.emit("blackjack:error", { message: "ამ მაგიდაზე წინა ხელი ჯერ სრულდება." });
+      return;
+    }
     if (already) {
       already.socketId = socket.id;
       already.connected = true;
@@ -13903,7 +13945,7 @@ io.on("connection", (socket) => {
 
     if (room.players.length >= BJ_MAX_PLAYERS) { socket.emit("blackjack:error", { message: "მაგიდა სავსეა." }); return; }
     if (user.isGuest && findActiveBjRoomForUser(lc)) { socket.emit("blackjack:error", { message: "ჯერ დატოვე მიმდინარე მაგიდა." }); return; }
-    if (findActivePokerRoomForUser(lc)) { socket.emit("blackjack:error", { message: AT_OTHER_TABLE_MSG }); return; }
+    switchCoinGame(user, lc, "blackjack");
 
     const invite = room.pendingInvites.get(lc);
     if (invite) clearTimeout(invite.timeoutHandle);
@@ -13938,7 +13980,7 @@ io.on("connection", (socket) => {
     if (!room || room.status !== "playing" || room.phase !== "betting") return;
     const lc = socket._regUser.usernameLower;
     const player = room.players.find(p => p.lc === lc);
-    if (!player || player.bet) return;
+    if (!player || player.socketId !== socket.id || player.transferredStack !== undefined || player.bet) return;
 
     const bet = Math.floor(Number(amount));
     if (!Number.isFinite(bet) || bet < BJ_MIN_BET || bet > BJ_MAX_BET || bet > player.stack) {
@@ -13956,7 +13998,7 @@ io.on("connection", (socket) => {
     if (!room || room.status !== "playing" || room.phase !== "playing") return;
     const lc = socket._regUser.usernameLower;
     const player = room.players[room.turnSeat];
-    if (!player || player.lc !== lc) return;
+    if (!player || player.lc !== lc || player.socketId !== socket.id || player.transferredStack !== undefined) return;
 
     if (action === "hit") bjApplyHit(room);
     else if (action === "stand") bjApplyStand(room);

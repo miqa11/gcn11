@@ -1326,6 +1326,10 @@
       backToSetup();
     });
 
+    socket.on("poker:switchedGame", () => {
+      backToSetup();
+      showToast("სხვა თამაშზე გადახვედი.");
+    });
     socket.on("poker:error", ({ message }) => showToast(message));
     socket.on("poker:kicked", () => { showToast("🚫 მასპინძელმა ლობიდან გაგაგდო"); backToSetup(); });
     socket.on("poker:kickDone", ({ username }) => showToast(`${username} ლობიდან გააგდე`));
