@@ -231,14 +231,7 @@ const io     = new Server(server, {
   pingInterval: 25000,
   // Allow both polling and websocket so mobile fallback works
   transports: ["websocket", "polling"],
-  // Default is 1MB, which would silently drop any photo upload anywhere
-  // near the application-level cap enforced in privateMsg:sendPhoto — the
-  // packet never reaches that handler's validation at all, so the sender
-  // would see nothing happen with no error. Sized for a 20MB raw image
-  // (~26.7MB as base64, since base64 expands by 4/3) plus its JSON
-  // envelope, with headroom. Real phone-camera photos can legitimately be
-  // in the 8-20MB range at full resolution, which is what this is for —
-  // they get resized down server-side after upload, not rejected outright.
+  // Keep room for existing voice uploads and other media envelopes.
   maxHttpBufferSize: 30 * 1024 * 1024,
   // The live connection (/socket.io/) never passes through Express, so the
   // *.onrender.com block above didn't cover it: a bot could connect straight
@@ -3255,10 +3248,6 @@ function broadcastQueuePositions() {
   waitingQueue.forEach((s, i) => s.emit("queuePosition", { position: i + 1, total: waitingQueue.length }));
 }
 
-// 📷 Random-chat photos (VIP): size limit, and how long one waits for a yes.
-const RC_PHOTO_MAX_BYTES = 4 * 1024 * 1024;
-const RC_PHOTO_WAIT_MS   = 2 * 60 * 1000;
-
 // ── 🛟 Support AI (see server-supportai.js) ─────────────────────────────────
 // "Support AI" is in random chat's pool like any other person: it asks what
 // we should improve, and what people write to it shows up on the Support
@@ -3872,46 +3861,9 @@ io.on("connection", (socket) => {
   });
 
 
-  // ── 📷 Photos in random chat — VIP senders, view once ──────────────────
-  // The other person is asked first; only if they say yes does the photo
-  // reach them. It's never saved: it waits in memory (at most 2 minutes)
-  // for the answer, then it's gone either way. They see it blurred, tap,
-  // and it's on screen for 10 seconds.
-  socket.on("rcPhoto:offer", async ({ data, targetName } = {}, ack) => {
-    const reply = typeof ack === "function" ? ack : () => {};
-    const to = socket.partner;
-    if (!to || to._isGhost) return reply({ error: "თანამოსაუბრე არ გყავს" });
-    if (targetName !== undefined && targetName !== to.userName) return reply({ error: "თანამოსაუბრე შეიცვალა" });
-    const acct = socket._regUser && !socket._regUser.isGuest && registeredUsers.get(socket._regUser.usernameLower);
-    if (!isVip(acct)) return reply({ error: "ფოტოს გაგზავნა მხოლოდ VIP მომხმარებლებს შეუძლიათ" });
-    if (to.isSupportAI) return reply({ error: "Support AI-ს ფოტოს ვერ გაუგზავნი" });
-    if (socket._rcPhoto) return reply({ error: "წინა ფოტოზე პასუხს ჯერ ელოდები" });
-    if (mediaRateLimited(socket, "rcPhoto", 4, 60_000)) return reply({ error: "ძალიან ხშირად აგზავნი — ცოტა დაელოდე" });
-    let buf = null;
-    try { buf = Buffer.from(String(data || ""), "base64"); } catch (_) {}
-    if (!buf || buf.length < 100 || buf.length > RC_PHOTO_MAX_BYTES) return reply({ error: "ფოტო ზედმეტად დიდია" });
-    // A real picture (anything else fails here), upright, no hidden details.
-    if (sharp) {
-      try { buf = await sharp(buf).rotate().resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer(); }
-      catch (_) { return reply({ error: "ეს ფაილი სურათი არ არის ან დაზიანებულია" }); }
-    } else if (!(buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF)) return reply({ error: "ეს ფაილი სურათი არ არის" });
-    if (!socket.connected || socket.partner !== to || !to.connected) return reply({ error: "თანამოსაუბრე შეიცვალა" });
-    if (socket._rcPhoto) return reply({ error: "წინა ფოტოზე პასუხს ჯერ ელოდები" });
-    const id = crypto.randomBytes(8).toString("hex");
-    const offer = { id, buf, to };
-    offer.timer = setTimeout(() => {          // no answer in time → withdrawn
-      if (socket._rcPhoto !== offer) return;
-      socket._rcPhoto = null;
-      if (to._rcIncoming) to._rcIncoming.delete(id);
-      to.emit("rcPhoto:withdrawn", { id });
-      socket.emit("rcPhoto:status", { id, state: "expired" });
-    }, RC_PHOTO_WAIT_MS);
-    socket._rcPhoto = offer;
-    to._rcIncoming = to._rcIncoming || new Map();
-    to._rcIncoming.set(id, socket);
-    to.emit("rcPhoto:offer", { id, from: socket.userName });
-    bumpStat("photoRandom");
-    reply({ ok: true, id });
+  // Reject photo sends from older clients as well as the current UI.
+  socket.on("rcPhoto:offer", (_payload, ack) => {
+    if (typeof ack === "function") ack({ error: "ფოტოების გაგზავნა გამორთულია." });
   });
   socket.on("rcPhoto:answer", ({ id, accept } = {}) => {
     const from = socket._rcIncoming && socket._rcIncoming.get(id);
@@ -12113,174 +12065,9 @@ io.on("connection", (socket) => {
     socket.emit("streak:update", { friendUsername: toUser.username, count: streak.count, atRisk: streak.atRisk });
   });
 
-  // ── privateMsg:sendPhoto — pro users only, private chat with an EXISTING
-  // mutual friend only. Deliberately NOT available in random chat —
-  // see the scoping note at the top of this feature. Checked
-  // more strictly than the plain text handler above: friendship is verified
-  // in BOTH directions here rather than assumed from room membership, since
-  // image content warrants the extra certainty.
-  //
-  // Every photo is processed through sharp before being saved:
-  //   * auto-rotated using the image's own EXIF orientation flag — phone
-  //     photos are very often stored "sideways" with a flag saying how to
-  //     display them the right way up; skipping this step means photos can
-  //     arrive rotated 90°.
-  //   * resized down to at most 2000px on the long edge. Modern phone
-  //     cameras routinely produce 8-20MB+ JPEGs at full resolution — far
-  //     more than anyone needs for viewing in a chat — so this is a
-  //     generous ceiling, not a quality compromise for normal use.
-  //   * re-encoded as JPEG, regardless of the source format. This is also
-  //     what makes HEIC/HEIC — the default format on iPhone cameras —
-  //     actually work: previously HEIC uploads were rejected outright,
-  //     which likely explains photo-sending appearing broken for anyone on
-  //     iPhone, probably most real users of this feature.
-  // sharp is also the SECURITY boundary here, not the declared mimeType:
-  // if sharp can't decode the bytes as a real image, they get rejected
-  // regardless of what the client claimed the file was.
-  const MAX_PHOTO_INPUT_BYTES = 20 * 1024 * 1024; // 20MB raw — covers real phone photos with margin
-  const PHOTO_MAX_DIMENSION   = 2000;
-  const PHOTO_JPEG_QUALITY    = 85;
-
-  // 🔐 Between two people with keys the photo arrives already shrunk,
-  // turned upright and stripped of its hidden details (location…) by the
-  // sender's browser, then locked — the server only checks its size.
-  const MAX_E2E_PHOTO_BYTES = 8 * 1024 * 1024;
-  socket.on("privateMsg:sendPhoto", async ({ toUsername, photoData, mimeType, messageId, e2e }) => {
-    if (!socket._regUser || !toUsername || !photoData) return;
-    if (socket._regUser.isGuest) { socket.emit("privateMsg:photoSent", { success: false, messageId, error: "სტუმრებს ფოტოს გაგზავნა არ შეუძლიათ" }); return; }
-
-    const myLc = socket._regUser.usernameLower;
-    const myUser = registeredUsers.get(myLc);
-    if (!isVip(myUser)) {
-      socket.emit("privateMsg:photoSent", { success: false, messageId, error: "ფოტოს გაგზავნა მხოლოდ VIP მომხმარებლებს შეუძლიათ" });
-      return;
-    }
-
-    // 5 photos per minute — generous for real chat use, protects storage
-    // and the recipient from being flooded with images.
-    if (mediaRateLimited(socket, "privatePhoto", 5, 60_000)) {
-      socket.emit("privateMsg:photoSent", { success: false, messageId, error: "ძალიან ხშირად აგზავნი — ცოტა დაელოდე" });
-      return;
-    }
-
-    const toLc = String(toUsername).toLowerCase().trim();
-    const toUser = registeredUsers.get(toLc);
-    if (!toUser) { socket.emit("privateMsg:photoSent", { success: false, messageId, error: "მომხმარებელი ვერ მოიძებნა" }); return; }
-
-    // Mutual friendship checked explicitly in BOTH directions, rather than
-    // relying on the caller having already joined the friendchat room —
-    // a stricter bar than plain text messages get, deliberately, given
-    // this is image content.
-    if (!(myUser.friends || []).includes(toLc) || !(toUser.friends || []).includes(myLc)) {
-      socket.emit("privateMsg:photoSent", { success: false, messageId, error: "მხოლოდ ორმხრივ მეგობრებთან შეგიძლია ფოტოს გაგზავნა" });
-      return;
-    }
-
-    // Same block check as text messages.
-    if (toUser.blockedUsers?.includes(myLc) || myUser.blockedUsers?.includes(toLc)) {
-      socket.emit("privateMsg:photoSent", { success: false, messageId }); return;
-    }
-    const route = e2eeRoute(myUser, toUser, e2e, false);
-    if (route.error) { socket.emit("privateMsg:photoSent", { success: false, messageId, error: route.error }); return; }
-
-    let rawBuffer;
-    try {
-      rawBuffer = Buffer.from(String(photoData), "base64");
-    } catch {
-      socket.emit("privateMsg:photoSent", { success: false, messageId, error: "ფოტოს დამუშავება ვერ მოხერხდა" });
-      return;
-    }
-    if (!rawBuffer.length || rawBuffer.length > MAX_PHOTO_INPUT_BYTES) {
-      socket.emit("privateMsg:photoSent", { success: false, messageId, error: "ფოტო ზედმეტად დიდია (მაქს. 20MB)" });
-      return;
-    }
-
-    let processedBuffer;
-    let outExt = "jpg";
-    if (route.e2e) {
-      if (rawBuffer.length < 100 || rawBuffer.length > MAX_E2E_PHOTO_BYTES) {
-        socket.emit("privateMsg:photoSent", { success: false, messageId, error: "ფოტო ზედმეტად დიდია" });
-        return;
-      }
-      processedBuffer = rawBuffer;
-      outExt = "e2e";
-    } else if (sharp) {
-      try {
-        processedBuffer = await sharp(rawBuffer)
-          .rotate() // auto-orient from EXIF before anything else touches the pixels
-          .resize({ width: PHOTO_MAX_DIMENSION, height: PHOTO_MAX_DIMENSION, fit: "inside", withoutEnlargement: true })
-          .jpeg({ quality: PHOTO_JPEG_QUALITY, mozjpeg: true })
-          .toBuffer();
-      } catch (e) {
-        // sharp couldn't decode this as an image at all — this is the real
-        // format/content check, not the client-declared mimeType.
-        console.warn("[PHOTOS] sharp could not process upload:", e.message);
-        socket.emit("privateMsg:photoSent", { success: false, messageId, error: "ეს ფაილი სურათი არ არის ან დაზიანებულია" });
-        return;
-      }
-    } else {
-      // No sharp on this host: identify the format from the file's own
-      // leading bytes (never the browser's label) and store it unchanged.
-      // HEIC needs sharp to convert, so it's refused with a clear message.
-      const b = rawBuffer;
-      if (b[0] === 0xFF && b[1] === 0xD8 && b[2] === 0xFF) outExt = "jpg";
-      else if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) outExt = "png";
-      else if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) outExt = "gif";
-      else if (b.slice(0, 4).toString("latin1") === "RIFF" && b.slice(8, 12).toString("latin1") === "WEBP") outExt = "webp";
-      else {
-        socket.emit("privateMsg:photoSent", { success: false, messageId, error: "ეს ფორმატი ჯერ არ არის მხარდაჭერილი — სცადე JPG ან PNG" });
-        return;
-      }
-      processedBuffer = rawBuffer;
-    }
-
-    // Never trust or reuse anything client-supplied for the name itself,
-    // both to avoid path-traversal and so filenames can't collide.
-    const filename = crypto.randomBytes(20).toString("hex") + "." + outExt;
-    try {
-      fs.writeFileSync(path.join(PRIVATE_PHOTOS_DIR, filename), chatCrypt.encryptFile(processedBuffer));
-    } catch (e) {
-      console.error("[PHOTOS] Failed to save:", e.message);
-      socket.emit("privateMsg:photoSent", { success: false, messageId, error: "შენახვა ვერ მოხერხდა" });
-      return;
-    }
-    const photoUrl = "/private-photos/" + filename;
-
-    const roomId = privRoomId(myLc, toLc);
-    let room = privateRooms.get(roomId);
-    if (!room) {
-      room = { messages: [], createdAt: Date.now(), expiresAt: Date.now() + PRIVATE_MSG_TTL };
-      privateRooms.set(roomId, room);
-    }
-
-    const msg = {
-      id: String(messageId || "").slice(0, 100) || `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      from: myLc,
-      type: "photo",
-      photoUrl,
-      ts: new Date().toISOString(),
-    };
-    if (route.e2e) msg.e2e = route.e2e;
-    room.messages.push(msg);
-    bumpStat("photoPrivate");
-    trimRoomMessages(room);
-    room.expiresAt = Date.now() + PRIVATE_MSG_TTL;
-    savePrivateMsgs();
-
-    io.to(`user:${toLc}`).emit("privateMsg:received", {
-      fromUsername: socket._regUser.username,
-      type: "photo",
-      photoUrl,
-      timestamp: msg.ts,
-      messageId: msg.id,
-      e2e: msg.e2e || null,
-    });
-    socket.emit("privateMsg:photoSent", { success: true, messageId: msg.id, photoUrl });
-    notifyPrivateMessage(myLc, socket._regUser.username, toLc, "photo");
-
-    const streak = recordFriendMessage(myLc, toLc);
-    io.to(`user:${toLc}`).emit("streak:update", { friendUsername: socket._regUser.username, count: streak.count, atRisk: streak.atRisk });
-    socket.emit("streak:update", { friendUsername: toUser.username || toUsername, count: streak.count, atRisk: streak.atRisk });
+  // Keep the legacy reply event so older tabs can report the failure.
+  socket.on("privateMsg:sendPhoto", ({ messageId } = {}) => {
+    socket.emit("privateMsg:photoSent", { success: false, messageId, error: "ფოტოების გაგზავნა გამორთულია." });
   });
 
   // ── 📷 Private photos are view-once: when the friend it was sent to has

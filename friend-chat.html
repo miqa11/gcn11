@@ -632,7 +632,6 @@
        until the limit is near) so the text box gets the row. */
     @media (max-width: 600px) {
       #fc-input-bar.long-text #fc-question-btn,
-      #fc-input-bar.long-text #fc-photo-btn,
       #fc-input-bar.long-text #fc-voice-btn,
       #fc-input-bar.long-text .fc-char-count:not(.warning) { display: none !important; }
     }
@@ -1166,11 +1165,6 @@ button, textarea, input { font-family: inherit; }
     <span class="chat-ad-countdown" data-chat-ad-counter="private" aria-live="polite" title="ყოველ მე-5 გაგზავნაზე რეკლამა ახალ ფანჯარაში გაიხსნება.">რეკლამამდე · 5</span>
     <button class="fc-extra-btn" id="fc-gif-btn" title="ემოჯი, სტიკერები და GIF" aria-label="ემოჯი, სტიკერები და GIF" style="font-size:20px">😊</button>
     <button class="fc-extra-btn" id="fc-question-btn" title="შემთხვევითი კითხვა">?</button>
-    <!-- Pro-only. Stays hidden (display:none) until JS confirms isPro, so
-         non-pro users — the vast majority — see no extra clutter in an
-         already-tight row. -->
-    <button class="fc-extra-btn" id="fc-photo-btn" title="ფოტოს გაგზავნა" style="display:none">📷</button>
-    <input type="file" id="fc-photo-input" accept="image/*" style="display:none" />
     <button class="fc-extra-btn" id="fc-voice-btn" title="ხმოვანი შეტყობინება" aria-label="ხმოვანი შეტყობინების ჩაწერა" style="display:none">🎤</button>
     <!-- 🎤 recording: covers the input bar until you send or cancel -->
     <div class="fc-rec" id="fc-rec" hidden>
@@ -2322,7 +2316,6 @@ button, textarea, input { font-family: inherit; }
         isPro: myIsPro,
       });
       window.GaicaniAds?.setVip(myIsPro);
-      refreshPhotoBtnVisibility();
       socket.emit("friendChat:join", { friendUsername: friendName });
       loadFriendHeader();
       // Logged in (again) → whatever is still waiting goes out now.
@@ -2361,7 +2354,6 @@ button, textarea, input { font-family: inherit; }
       myIsPro = !!isPro;
       window.GaicaniAds?.setVip(myIsPro);
       window.gaicaniAuthUser = Object.assign(window.gaicaniAuthUser || {}, { isPro: myIsPro });
-      refreshPhotoBtnVisibility();
     });
 
     /* Incoming message for THIS friend conversation */
@@ -2675,46 +2667,7 @@ button, textarea, input { font-family: inherit; }
     });
   }
 
-  /* ── 📷 Photos (VIP senders) — view once ─────────────────────────
-     📷 → "send a photo?" → gallery → preview → send (see view-once.js).
-     The friend is asked first, sees it blurred, taps, has it on screen
-     for 10 seconds; then the server deletes it and both chats say so. */
-  const elPhotoBtn = $("fc-photo-btn");
-  // Shown once we know the person is VIP (auth:authenticated /
-  // auth:proStatusChanged), hidden again if that's taken away.
-  function refreshPhotoBtnVisibility() {
-    if (elPhotoBtn) elPhotoBtn.style.display = myIsPro ? "" : "none";
-  }
-  if (elPhotoBtn) elPhotoBtn.addEventListener("click", async () => {
-    if (!myIsPro || !window.GaicaniViewOnce) return;
-    const r = await window.GaicaniViewOnce.choose({ to: friendName });
-    if (!r) return;
-    if (r.error) { showToast("⚠️ " + r.error); return; }
-    sendPhotoBlob(r.blob);
-  });
-  const blobBase64 = (blob) => new Promise((res, rej) => {
-    const fr = new FileReader();
-    fr.onload = () => { const s = String(fr.result); res(s.slice(s.indexOf(",") + 1)); };
-    fr.onerror = rej;
-    fr.readAsDataURL(blob);
-  });
-  async function sendPhotoBlob(blob) {
-    if (!socket) return;
-    const sealed = E2EE && (E2EE.canSeal(friendLc) || E2EE.mustSeal(friendLc));
-    if (sealed && !E2EE.canSeal(friendLc)) { showToast(LOCKED_SEND_MSG, 4500); showUnlock(true); return; }
-    const msgId = fcGenId();
-    const localUrl = URL.createObjectURL(blob);
-    appendMessage({ id: msgId, from: myUsername, type: "photo", photoUrl: localUrl, localUrl, ts: new Date().toISOString() });
-    try {
-      if (sealed) {
-        // 🔐 locked here; the server only stores what it can't open
-        const { env, data } = await E2EE.sealFile(friendLc, "photo", await blobBytes(blob));
-        socket.emit("privateMsg:sendPhoto", { toUsername: friendName, photoData: data, mimeType: "image/jpeg", messageId: msgId, e2e: env });
-      } else {
-        socket.emit("privateMsg:sendPhoto", { toUsername: friendName, photoData: await blobBase64(blob), mimeType: "image/jpeg", messageId: msgId });
-      }
-    } catch (_) { showToast("⚠️ ფოტო ვერ გაიგზავნა"); }
-  }
+  // Existing view-once photos remain readable until viewed or expired.
   // The receiver's side: fetch (and unlock) only after they said yes.
   async function photoBlobUrl(msg) {
     if (msg.e2e) { const u = await sealedMediaUrl(msg); mediaUrls.delete(msg.photoUrl); return u; }
